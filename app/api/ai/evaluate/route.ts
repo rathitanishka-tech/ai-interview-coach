@@ -28,9 +28,16 @@ export async function POST(req: Request) {
     
     return NextResponse.json(evaluation, { status: 200 });
   } catch (error) {
-    console.error("Evaluation API Route Error:", error);
-    const msg = error instanceof Error ? error.message : "Failed to evaluate answer. Falling back to rule-based evaluation.";
-    // Return the safe parsed error message without exposing full provider trace
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("Evaluation API Route Error:", error instanceof Error ? error.message : "Unknown error");
+    
+    let errorCode = "UNKNOWN_ERROR";
+    if (error instanceof Error) {
+      if (["RATE_LIMITED", "QUOTA_EXHAUSTED", "INVALID_API_KEY", "MODEL_UNAVAILABLE", "SERVICE_UNAVAILABLE", "UNKNOWN_ERROR"].includes(error.message)) {
+        errorCode = error.message;
+      }
+    }
+    
+    // Return the safe structured error code
+    return NextResponse.json({ error: errorCode }, { status: 500 });
   }
 }

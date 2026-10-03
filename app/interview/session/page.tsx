@@ -127,8 +127,23 @@ export default function SessionPage() {
         }
       }));
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : "Unknown AI error";
-      console.warn(`Evaluation failed for ${question.id}. Using fallback.`, errorMsg);
+      let errorCode = "UNKNOWN_ERROR";
+      if (e instanceof Error) {
+        errorCode = e.message;
+      }
+      
+      const errorMap: Record<string, string> = {
+        "RATE_LIMITED": "Rate Limit Exceeded. Please slow down.",
+        "QUOTA_EXHAUSTED": "API Quota Exceeded.",
+        "INVALID_API_KEY": "Missing or Invalid API Key.",
+        "MODEL_UNAVAILABLE": "Configured AI model is unavailable.",
+        "SERVICE_UNAVAILABLE": "Service is currently experiencing high demand.",
+        "UNKNOWN_ERROR": "An unknown error occurred."
+      };
+      
+      const displayMsg = errorMap[errorCode] || "Service Unavailable";
+      
+      console.warn(`Evaluation failed for ${question.id}. Using fallback.`, errorCode);
       const fallbackFeedback = evaluateAnswer(text);
       setAnswers(prev => ({
         ...prev,
@@ -136,7 +151,7 @@ export default function SessionPage() {
           ...prev[question.id],
           evaluationStatus: 'fallback',
           feedback: fallbackFeedback,
-          aiError: errorMsg
+          aiError: displayMsg
         }
       }));
     }
