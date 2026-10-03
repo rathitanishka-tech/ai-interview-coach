@@ -29,7 +29,8 @@ export async function POST(req: Request) {
     return NextResponse.json(evaluation, { status: 200 });
   } catch (error) {
     console.error("Evaluation API Route Error:", error);
-    // Return generic server error without exposing provider trace
-    return NextResponse.json({ error: "Failed to evaluate answer. Falling back to rule-based evaluation." }, { status: 500 });
+    const msg = error instanceof Error ? error.message : "Failed to evaluate answer. Falling back to rule-based evaluation.";
+    // Return the safe parsed error message without exposing full provider trace
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

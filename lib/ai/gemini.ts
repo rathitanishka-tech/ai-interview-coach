@@ -104,6 +104,22 @@ You must return ONLY a JSON object exactly matching the requested schema. All sc
     return result;
   } catch (error) {
     console.error("Gemini Evaluation Error:", error instanceof Error ? error.message : "Unknown error");
+    
+    if (error instanceof Error) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes("gemini_api_key is not configured")) {
+        throw new Error("Missing API Key. Please configure GEMINI_API_KEY.");
+      }
+      if (msg.includes("quota") || msg.includes("429")) {
+        throw new Error("AI service quota exceeded. Please try again later.");
+      }
+      if (msg.includes("503") || msg.includes("demand") || msg.includes("unavailable")) {
+        throw new Error("AI service is currently experiencing high demand.");
+      }
+      if (msg.includes("not_found") || msg.includes("404")) {
+        throw new Error("Configured AI model version is no longer available.");
+      }
+    }
     throw new Error("Failed to evaluate answer using AI.");
   }
 }

@@ -10,6 +10,7 @@ interface AnswerState {
   text: string;
   evaluationStatus: 'none' | 'loading' | 'evaluated' | 'fallback';
   feedback?: string;
+  aiError?: string;
   evaluation?: {
     score: number;
     technicalAccuracy: number;
@@ -107,7 +108,11 @@ export default function SessionPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get AI evaluation");
+        let errData = { error: "Failed to get AI evaluation" };
+        try {
+          errData = await response.json();
+        } catch (_) {} // ignore parsing errors for 500s that aren't JSON
+        throw new Error(errData.error || "Failed to get AI evaluation");
       }
 
       const aiEval = await response.json();
@@ -122,14 +127,16 @@ export default function SessionPage() {
         }
       }));
     } catch (e) {
-      console.warn(`Evaluation failed for ${question.id}. Using fallback.`, e);
+      const errorMsg = e instanceof Error ? e.message : "Unknown AI error";
+      console.warn(`Evaluation failed for ${question.id}. Using fallback.`, errorMsg);
       const fallbackFeedback = evaluateAnswer(text);
       setAnswers(prev => ({
         ...prev,
         [question.id]: {
           ...prev[question.id],
           evaluationStatus: 'fallback',
-          feedback: fallbackFeedback
+          feedback: fallbackFeedback,
+          aiError: errorMsg
         }
       }));
     }
@@ -240,7 +247,9 @@ export default function SessionPage() {
                     ) : (
                       <div className={styles.answerFeedback}>
                         <strong>Rule-based Feedback:</strong> {ans.feedback || "No feedback available."}
-                        <span className={styles.fallbackLabel}> (AI Evaluation Unavailable)</span>
+                        <div className={styles.fallbackLabel}>
+                          (AI Evaluation Failed: {ans.aiError || "Service Unavailable"})
+                        </div>
                       </div>
                     )}
                   </div>
