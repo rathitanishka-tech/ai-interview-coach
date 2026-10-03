@@ -26,6 +26,30 @@ export default function HistoryPage() {
     ? Math.round(history.reduce((acc, curr) => acc + curr.overallScore, 0) / totalInterviews)
     : 0;
 
+  // Aggregation for Skill Analytics
+  let totalTech = 0, totalRel = 0, totalComp = 0, totalComm = 0;
+  let evalCount = 0;
+
+  history.forEach(record => {
+    Object.values(record.answers).forEach(ans => {
+      if (ans.evaluationStatus === 'evaluated' && ans.evaluation) {
+        totalTech += ans.evaluation.technicalAccuracy || 0;
+        totalRel += ans.evaluation.relevance || 0;
+        totalComp += ans.evaluation.completeness || 0;
+        totalComm += ans.evaluation.communication || 0;
+        evalCount++;
+      }
+    });
+  });
+
+  const avgTech = evalCount > 0 ? Math.round(totalTech / evalCount) : 0;
+  const avgRel = evalCount > 0 ? Math.round(totalRel / evalCount) : 0;
+  const avgComp = evalCount > 0 ? Math.round(totalComp / evalCount) : 0;
+  const avgComm = evalCount > 0 ? Math.round(totalComm / evalCount) : 0;
+
+  // Chronological data for Trend Chart
+  const trendData = [...history].sort((a, b) => a.timestamp - b.timestamp);
+
   return (
     <div className={styles.container}>
       <header className={styles.topBar}>
@@ -37,7 +61,7 @@ export default function HistoryPage() {
 
       <main className={styles.main}>
         <div className={styles.header}>
-          <h1 className={styles.title}>Performance Analytics</h1>
+          <h1 className={styles.title}>Career Growth Engine</h1>
           <p className={styles.subtitle}>Track your progress and review past feedback</p>
         </div>
 
@@ -49,6 +73,15 @@ export default function HistoryPage() {
           </div>
         ) : (
           <>
+            <div className={styles.disclaimer}>
+              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span><strong>Note:</strong> These scores are AI-generated estimates to guide your preparation and refine your communication, not objective certifications.</span>
+            </div>
+
             <div className={styles.statsGrid}>
               <div className={styles.statCard}>
                 <span className={styles.statValue}>{totalInterviews}</span>
@@ -64,6 +97,89 @@ export default function HistoryPage() {
               </div>
             </div>
 
+            {/* AI Career Growth Analytics Section */}
+            <div className={styles.analyticsSection}>
+              <h2 className={styles.sectionTitle}>Skill Analytics</h2>
+              
+              {evalCount === 0 ? (
+                <div className={styles.emptyState} style={{ padding: '3rem 2rem' }}>
+                  <h2>Insufficient Data</h2>
+                  <p>We need at least one AI-evaluated answer to generate your skill breakdown.</p>
+                </div>
+              ) : (
+                <div className={styles.analyticsGrid}>
+                  
+                  {/* Skill Breakdown Chart */}
+                  <div className={styles.chartCard}>
+                    <h3>Skill Breakdown <span style={{fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 'normal'}}>(Based on {evalCount} answers)</span></h3>
+                    
+                    <div className={styles.skillBar}>
+                      <div className={styles.skillHeader}>
+                        <span>Technical Accuracy</span>
+                        <span>{avgTech}/100</span>
+                      </div>
+                      <div className={styles.skillTrack}>
+                        <div className={styles.skillFill} style={{ width: `${avgTech}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className={styles.skillBar}>
+                      <div className={styles.skillHeader}>
+                        <span>Relevance</span>
+                        <span>{avgRel}/100</span>
+                      </div>
+                      <div className={styles.skillTrack}>
+                        <div className={styles.skillFill} style={{ width: `${avgRel}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className={styles.skillBar}>
+                      <div className={styles.skillHeader}>
+                        <span>Completeness</span>
+                        <span>{avgComp}/100</span>
+                      </div>
+                      <div className={styles.skillTrack}>
+                        <div className={styles.skillFill} style={{ width: `${avgComp}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className={styles.skillBar}>
+                      <div className={styles.skillHeader}>
+                        <span>Communication</span>
+                        <span>{avgComm}/100</span>
+                      </div>
+                      <div className={styles.skillTrack}>
+                        <div className={styles.skillFill} style={{ width: `${avgComm}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trend Chart */}
+                  <div className={styles.chartCard}>
+                    <h3>Score Trend over Time</h3>
+                    <div className={styles.trendContainer}>
+                      {trendData.map((record) => {
+                        const dateLabel = new Date(record.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                        return (
+                          <div key={record.id} className={styles.trendBarWrapper}>
+                            <div className={styles.trendScoreLabel}>{record.overallScore}</div>
+                            <div 
+                              className={styles.trendBar} 
+                              style={{ height: `${Math.max(record.overallScore, 5)}%` }}
+                              title={`${dateLabel}: ${record.overallScore}/100`}
+                            ></div>
+                            <div className={styles.trendLabel}>{dateLabel}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                </div>
+              )}
+            </div>
+
+            <h2 className={styles.sectionTitle}>Interview History</h2>
             <div className={styles.historyList}>
               {history.map((record) => {
                 const date = new Date(record.timestamp).toLocaleDateString(undefined, { 

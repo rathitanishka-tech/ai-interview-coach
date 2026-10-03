@@ -287,3 +287,135 @@
   font-size: 0.85rem;
   margin-bottom: 1rem;
 }
+
+.disclaimer {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius-md);
+  margin-bottom: 2rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.analyticsSection {
+  margin-bottom: 4rem;
+}
+
+.sectionTitle {
+  font-family: var(--font-family-heading);
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--color-text);
+}
+
+.analyticsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .analyticsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chartCard {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  padding: 2rem;
+}
+
+.chartCard h3 {
+  font-family: var(--font-family-heading);
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.skillBar {
+  margin-bottom: 1.25rem;
+}
+
+.skillBar:last-child {
+  margin-bottom: 0;
+}
+
+.skillHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.skillTrack {
+  width: 100%;
+  height: 8px;
+  background-color: var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.skillFill {
+  height: 100%;
+  background-color: var(--color-primary);
+  border-radius: 4px;
+  transition: width 1s ease-out;
+}
+
+.trendContainer {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  height: 150px;
+  padding-top: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.trendBarWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  position: relative;
+}
+
+.trendBar {
+  width: 100%;
+  max-width: 40px;
+  background-color: var(--color-primary);
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.trendBar:hover {
+  opacity: 1;
+}
+
+.trendLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.5rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.trendScoreLabel {
+  position: absolute;
+  top: -1.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
