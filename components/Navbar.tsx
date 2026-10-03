@@ -11,7 +11,7 @@ export default function Navbar() {
         <div className={styles.links}>
           <Link href="#features" className={styles.link}>Features</Link>
           <Link href="#how-it-works" className={styles.link}>How It Works</Link>
-          <Link href="#for-you" className={styles.link}>For You</Link>
+          <Link href="/interview/history" className={styles.link}>History</Link>
         </div>
         <Link href="/interview/setup" className={styles.btnPrimary}>
           Start Practicing

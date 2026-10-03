@@ -22,8 +22,8 @@ export default function Home() {
                 <Link href="/interview/setup" className={styles.btnPrimary}>
                   Start a Mock Interview
                 </Link>
-                <Link href="#features" className={styles.btnSecondary}>
-                  Explore Features
+                <Link href="/interview/history" className={styles.btnSecondary}>
+                  View Interview History
                 </Link>
               </div>
             </div>

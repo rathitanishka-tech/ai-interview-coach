@@ -37,6 +37,9 @@ export default function SessionPage() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [error, setError] = useState("");
 
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+  const [sessionId] = useState(() => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
@@ -61,6 +64,32 @@ export default function SessionPage() {
     return () => clearInterval(interval);
   }, [mounted, isCompleted, startTime, config]);
 
+  useEffect(() => {
+    if (mounted && isCompleted && !isProcessingQueue && config) {
+      let totalScore = 0;
+      let evaluatedCount = 0;
+      Object.values(answers).forEach(ans => {
+        if (ans.evaluation) {
+          totalScore += ans.evaluation.score;
+          evaluatedCount++;
+        }
+      });
+      const overallScore = evaluatedCount > 0 ? Math.round(totalScore / evaluatedCount) : 0;
+      
+      import("@/lib/interview/storage").then(({ saveInterviewRecord }) => {
+        saveInterviewRecord({
+          id: sessionId,
+          timestamp: startTime || Date.now(),
+          config,
+          questions,
+          answers,
+          overallScore,
+          totalTimeSeconds: elapsedTime
+        });
+      });
+    }
+  }, [mounted, isCompleted, isProcessingQueue, answers, config, questions, startTime, elapsedTime, sessionId]);
+
   if (!mounted) return null;
 
   if (!config) {
@@ -82,7 +111,20 @@ export default function SessionPage() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const processQueue = async (items: {q: Question, text: string}[]) => {
+    setIsProcessingQueue(true);
+    for (const item of items) {
+      await submitAnswerCore(item.q, item.text);
+    }
+    setIsProcessingQueue(false);
+  };
+
   const submitAnswer = async (question: Question, text: string) => {
+    if (isProcessingQueue) return;
+    await processQueue([{q: question, text}]);
+  };
+
+  const submitAnswerCore = async (question: Question, text: string) => {
     // Mark as loading
     setAnswers(prev => ({
       ...prev,
@@ -111,7 +153,9 @@ export default function SessionPage() {
         let errData = { error: "Failed to get AI evaluation" };
         try {
           errData = await response.json();
-        } catch (_) {} // ignore parsing errors for 500s that aren't JSON
+        } catch {
+          // ignore parsing errors for 500s that aren't JSON
+        }
         throw new Error(errData.error || "Failed to get AI evaluation");
       }
 
@@ -265,6 +309,16 @@ export default function SessionPage() {
                         <div className={styles.fallbackLabel}>
                           (AI Evaluation Failed: {ans.aiError || "Service Unavailable"})
                         </div>
+                        {ans.evaluationStatus !== 'evaluated' && (
+                           <button 
+                             className={styles.btnSecondary} 
+                             onClick={() => submitAnswer(q, ans.text)}
+                             disabled={ans.evaluationStatus === 'loading' || isProcessingQueue}
+                             style={{ marginTop: '0.5rem', fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}
+                           >
+                             {ans.evaluationStatus === 'loading' ? "Retrying..." : "Retry AI Evaluation"}
+                           </button>
+                        )}
                       </div>
                     )}
                   </div>
