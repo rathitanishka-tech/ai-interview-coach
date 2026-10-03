@@ -9,6 +9,17 @@ interface Answer {
   questionId: string;
   text: string;
   feedback: string;
+  isAiEvaluated: boolean;
+  evaluation?: {
+    score: number;
+    technicalAccuracy: number;
+    relevance: number;
+    completeness: number;
+    communication: number;
+    strengths: string[];
+    improvements: string[];
+    idealAnswer: string;
+  };
 }
 
 export default function SessionPage() {
@@ -22,6 +33,7 @@ export default function SessionPage() {
   const [startTime, setStartTime] = useState<number>(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -82,23 +94,72 @@ export default function SessionPage() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const handleNext = () => {
+  const submitAnswer = async (textToSubmit: string, question: Question) => {
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/ai/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: question.text,
+          answer: textToSubmit,
+          role: config.role,
+          experience: config.experience,
+          type: config.type,
+          difficulty: config.difficulty
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get AI evaluation");
+      }
+
+      const aiEval = await response.json();
+      
+      setAnswers(prev => ({
+        ...prev,
+        [question.id]: {
+          questionId: question.id,
+          text: textToSubmit,
+          feedback: aiEval.feedback,
+          isAiEvaluated: true,
+          evaluation: aiEval
+        }
+      }));
+    } catch (e) {
+      console.warn("AI Evaluation failed, using fallback rule-based evaluation.", e);
+      // Fallback
+      const fallbackFeedback = evaluateAnswer(textToSubmit);
+      setAnswers(prev => ({
+        ...prev,
+        [question.id]: {
+          questionId: question.id,
+          text: textToSubmit,
+          feedback: fallbackFeedback,
+          isAiEvaluated: false
+        }
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleNext = async () => {
     if (!currentText.trim()) {
       setError("Please provide an answer before continuing.");
       return;
     }
 
     const currentQuestion = questions[currentIndex];
-    const feedback = evaluateAnswer(currentText);
-
-    setAnswers(prev => ({
-      ...prev,
-      [currentQuestion.id]: {
-        questionId: currentQuestion.id,
-        text: currentText,
-        feedback
-      }
-    }));
+    const existingAnswer = answers[currentQuestion.id];
+    
+    if (existingAnswer && existingAnswer.text === currentText && existingAnswer.isAiEvaluated) {
+      // Already successfully evaluated this text, just proceed
+    } else {
+      await submitAnswer(currentText, currentQuestion);
+    }
 
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1);
@@ -107,20 +168,15 @@ export default function SessionPage() {
     }
   };
 
-  const handlePrevious = () => {
+  const handlePrevious = async () => {
     if (currentIndex > 0) {
-      // Save current progress without validating empty
       if (currentText.trim()) {
         const currentQuestion = questions[currentIndex];
-        const feedback = evaluateAnswer(currentText);
-        setAnswers(prev => ({
-          ...prev,
-          [currentQuestion.id]: {
-            questionId: currentQuestion.id,
-            text: currentText,
-            feedback
-          }
-        }));
+        const existingAnswer = answers[currentQuestion.id];
+        
+        if (!existingAnswer || existingAnswer.text !== currentText) {
+          await submitAnswer(currentText, currentQuestion);
+        }
       }
       setCurrentIndex(prev => prev - 1);
     }
@@ -163,9 +219,40 @@ export default function SessionPage() {
                   <div key={q.id} className={styles.answerItem}>
                     <div className={styles.answerQ}>Q{i + 1}: {q.text}</div>
                     <div className={styles.answerA}>{ans.text}</div>
-                    <div className={styles.answerFeedback}>
-                      <strong>Feedback:</strong> {ans.feedback}
-                    </div>
+                    
+                    {ans.isAiEvaluated && ans.evaluation ? (
+                      <div className={styles.aiEvaluation}>
+                        <div className={styles.evalScore}>
+                          Score: <strong>{ans.evaluation.score}/100</strong>
+                        </div>
+                        <p className={styles.evalFeedback}>{ans.feedback}</p>
+                        
+                        <div className={styles.evalGrid}>
+                          <div className={styles.evalBox}>
+                            <h4>Strengths</h4>
+                            <ul>
+                              {ans.evaluation.strengths.map((s, idx) => <li key={idx}>{s}</li>)}
+                            </ul>
+                          </div>
+                          <div className={styles.evalBox}>
+                            <h4>Areas to Improve</h4>
+                            <ul>
+                              {ans.evaluation.improvements.map((s, idx) => <li key={idx}>{s}</li>)}
+                            </ul>
+                          </div>
+                        </div>
+
+                        <div className={styles.evalIdeal}>
+                          <h4>Ideal Answer Structure</h4>
+                          <p>{ans.evaluation.idealAnswer}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={styles.answerFeedback}>
+                        <strong>Rule-based Feedback:</strong> {ans.feedback}
+                        <span className={styles.fallbackLabel}> (AI Evaluation Unavailable)</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -218,15 +305,22 @@ export default function SessionPage() {
                 if (error) setError("");
               }}
               aria-label="Your answer"
+              disabled={isSubmitting}
             />
             
             <div className={styles.answerMeta}>
               <span className={styles.errorText}>{error}</span>
               <span>{currentText.length} characters</span>
             </div>
+            
+            {isSubmitting && (
+              <div style={{ color: 'var(--color-primary)', fontSize: 'var(--font-size-sm)', marginTop: '0.5rem' }}>
+                Analyzing your answer...
+              </div>
+            )}
 
-            {/* If an answer was already submitted and we navigated back, show the feedback */}
-            {answers[currentQuestion.id] && currentText === answers[currentQuestion.id].text && (
+            {/* If an answer was already submitted and we navigated back, show the feedback briefly */}
+            {answers[currentQuestion.id] && currentText === answers[currentQuestion.id].text && !isSubmitting && (
               <div className={styles.feedback}>
                 <strong>Previous Feedback:</strong> {answers[currentQuestion.id].feedback}
               </div>
@@ -236,11 +330,11 @@ export default function SessionPage() {
           <div className={styles.controls}>
             <div>
               {currentIndex > 0 ? (
-                <button className={styles.btnSecondary} onClick={handlePrevious}>
+                <button className={styles.btnSecondary} onClick={handlePrevious} disabled={isSubmitting}>
                   Previous
                 </button>
               ) : (
-                <button className={styles.btnSecondary} onClick={handleEndEarly}>
+                <button className={styles.btnSecondary} onClick={handleEndEarly} disabled={isSubmitting}>
                   End Early
                 </button>
               )}
@@ -250,8 +344,8 @@ export default function SessionPage() {
               <span style={{ marginRight: '1rem', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
                 {currentIndex + 1} of {questions.length}
               </span>
-              <button className={styles.btnPrimary} onClick={handleNext}>
-                {currentIndex === questions.length - 1 ? "Finish Interview" : "Submit Answer"}
+              <button className={styles.btnPrimary} onClick={handleNext} disabled={isSubmitting}>
+                {isSubmitting ? "Evaluating..." : currentIndex === questions.length - 1 ? "Finish Interview" : "Submit Answer"}
               </button>
             </div>
           </div>
