@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { evaluateInterviewAnswer } from "@/lib/ai/gemini";
+import { evaluateInterviewAnswerGroq } from "@/lib/ai/groq";
 
 export async function POST(req: Request) {
   try {
@@ -23,8 +23,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing interview configuration details." }, { status: 400 });
     }
 
-    // Call Gemini for evaluation
-    const evaluation = await evaluateInterviewAnswer(question, answer, role, experience, type, difficulty);
+    // Call Groq for evaluation
+    const evaluation = await evaluateInterviewAnswerGroq(question, answer, role, experience, type, difficulty);
     
     return NextResponse.json(evaluation, { status: 200 });
   } catch (error) {
