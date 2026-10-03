@@ -5,11 +5,11 @@ import Link from "next/link";
 import styles from "./session.module.css";
 import { InterviewConfig, Question, getQuestions, evaluateAnswer } from "@/lib/interview/questions";
 
-interface Answer {
+interface AnswerState {
   questionId: string;
   text: string;
-  feedback: string;
-  isAiEvaluated: boolean;
+  evaluationStatus: 'none' | 'loading' | 'evaluated' | 'fallback';
+  feedback?: string;
   evaluation?: {
     score: number;
     technicalAccuracy: number;
@@ -26,14 +26,15 @@ export default function SessionPage() {
   const [config, setConfig] = useState<InterviewConfig | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, Answer>>({});
-  const [currentText, setCurrentText] = useState("");
+  
+  // Store everything perfectly per question ID
+  const [answers, setAnswers] = useState<Record<string, AnswerState>>({});
+  
   const [mounted, setMounted] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [startTime, setStartTime] = useState<number>(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -51,27 +52,13 @@ export default function SessionPage() {
     }
   }, []);
 
-  // Timer effect
   useEffect(() => {
     if (!mounted || isCompleted || !config) return;
-    
     const interval = setInterval(() => {
       setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);
-    
     return () => clearInterval(interval);
   }, [mounted, isCompleted, startTime, config]);
-
-  // Load existing answer when navigating between questions
-  useEffect(() => {
-    if (questions.length > 0) {
-      const qId = questions[currentIndex].id;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCurrentText(answers[qId]?.text || "");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError("");
-    }
-  }, [currentIndex, questions, answers]);
 
   if (!mounted) return null;
 
@@ -94,8 +81,15 @@ export default function SessionPage() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const submitAnswer = async (textToSubmit: string, question: Question) => {
-    setIsSubmitting(true);
+  const submitAnswer = async (question: Question, text: string) => {
+    // Mark as loading
+    setAnswers(prev => ({
+      ...prev,
+      [question.id]: {
+        ...(prev[question.id] || { questionId: question.id, text }),
+        evaluationStatus: 'loading'
+      }
+    }));
     setError("");
 
     try {
@@ -104,7 +98,7 @@ export default function SessionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: question.text,
-          answer: textToSubmit,
+          answer: text,
           role: config.role,
           experience: config.experience,
           type: config.type,
@@ -121,48 +115,43 @@ export default function SessionPage() {
       setAnswers(prev => ({
         ...prev,
         [question.id]: {
-          questionId: question.id,
-          text: textToSubmit,
+          ...prev[question.id],
+          evaluationStatus: 'evaluated',
           feedback: aiEval.feedback,
-          isAiEvaluated: true,
           evaluation: aiEval
         }
       }));
     } catch (e) {
-      console.warn("AI Evaluation failed, using fallback rule-based evaluation.", e);
-      // Fallback
-      const fallbackFeedback = evaluateAnswer(textToSubmit);
+      console.warn(`Evaluation failed for ${question.id}. Using fallback.`, e);
+      const fallbackFeedback = evaluateAnswer(text);
       setAnswers(prev => ({
         ...prev,
         [question.id]: {
-          questionId: question.id,
-          text: textToSubmit,
-          feedback: fallbackFeedback,
-          isAiEvaluated: false
+          ...prev[question.id],
+          evaluationStatus: 'fallback',
+          feedback: fallbackFeedback
         }
       }));
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleNext = async () => {
-    if (!currentText.trim()) {
+    const currentQuestion = questions[currentIndex];
+    const currentAnswerState = answers[currentQuestion.id];
+    const text = currentAnswerState?.text || "";
+
+    if (!text.trim()) {
       setError("Please provide an answer before continuing.");
       return;
     }
 
-    const currentQuestion = questions[currentIndex];
-    const existingAnswer = answers[currentQuestion.id];
-    
-    if (existingAnswer && existingAnswer.text === currentText && existingAnswer.isAiEvaluated) {
-      // Already successfully evaluated this text, just proceed
-    } else {
-      await submitAnswer(currentText, currentQuestion);
+    if (!currentAnswerState || currentAnswerState.evaluationStatus === 'none') {
+      await submitAnswer(currentQuestion, text);
     }
 
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1);
+      setError("");
     } else {
       setIsCompleted(true);
     }
@@ -170,15 +159,16 @@ export default function SessionPage() {
 
   const handlePrevious = async () => {
     if (currentIndex > 0) {
-      if (currentText.trim()) {
-        const currentQuestion = questions[currentIndex];
-        const existingAnswer = answers[currentQuestion.id];
-        
-        if (!existingAnswer || existingAnswer.text !== currentText) {
-          await submitAnswer(currentText, currentQuestion);
-        }
+      const currentQuestion = questions[currentIndex];
+      const currentAnswerState = answers[currentQuestion.id];
+      
+      // If they typed something but didn't submit, submit it quietly
+      if (currentAnswerState && currentAnswerState.text.trim() && currentAnswerState.evaluationStatus === 'none') {
+        await submitAnswer(currentQuestion, currentAnswerState.text);
       }
+      
       setCurrentIndex(prev => prev - 1);
+      setError("");
     }
   };
 
@@ -202,7 +192,7 @@ export default function SessionPage() {
             
             <div className={styles.completionStats}>
               <div className={styles.stat}>
-                <span className={styles.statValue}>{Object.keys(answers).length} / {questions.length}</span>
+                <span className={styles.statValue}>{Object.keys(answers).filter(k => answers[k].text.trim()).length} / {questions.length}</span>
                 <span className={styles.statLabel}>Questions Answered</span>
               </div>
               <div className={styles.stat}>
@@ -214,13 +204,13 @@ export default function SessionPage() {
             <div className={styles.answersList}>
               {questions.map((q, i) => {
                 const ans = answers[q.id];
-                if (!ans) return null;
+                if (!ans || !ans.text.trim()) return null;
                 return (
                   <div key={q.id} className={styles.answerItem}>
                     <div className={styles.answerQ}>Q{i + 1}: {q.text}</div>
                     <div className={styles.answerA}>{ans.text}</div>
                     
-                    {ans.isAiEvaluated && ans.evaluation ? (
+                    {ans.evaluationStatus === 'evaluated' && ans.evaluation ? (
                       <div className={styles.aiEvaluation}>
                         <div className={styles.evalScore}>
                           Score: <strong>{ans.evaluation.score}/100</strong>
@@ -249,7 +239,7 @@ export default function SessionPage() {
                       </div>
                     ) : (
                       <div className={styles.answerFeedback}>
-                        <strong>Rule-based Feedback:</strong> {ans.feedback}
+                        <strong>Rule-based Feedback:</strong> {ans.feedback || "No feedback available."}
                         <span className={styles.fallbackLabel}> (AI Evaluation Unavailable)</span>
                       </div>
                     )}
@@ -268,8 +258,11 @@ export default function SessionPage() {
   }
 
   const currentQuestion = questions[currentIndex];
-
   if (!currentQuestion) return null;
+
+  const currentAnswerState = answers[currentQuestion.id];
+  const currentText = currentAnswerState?.text || "";
+  const isSubmitting = currentAnswerState?.evaluationStatus === 'loading';
 
   return (
     <div className={styles.container}>
@@ -301,7 +294,15 @@ export default function SessionPage() {
               placeholder="Take your time. Explain your thinking..."
               value={currentText}
               onChange={(e) => {
-                setCurrentText(e.target.value);
+                setAnswers(prev => ({
+                  ...prev,
+                  [currentQuestion.id]: {
+                    ...(prev[currentQuestion.id] || { questionId: currentQuestion.id, evaluationStatus: 'none' }),
+                    text: e.target.value,
+                    // If they edit the text, reset evaluation status so it can be re-evaluated
+                    evaluationStatus: 'none'
+                  }
+                }));
                 if (error) setError("");
               }}
               aria-label="Your answer"
@@ -319,10 +320,10 @@ export default function SessionPage() {
               </div>
             )}
 
-            {/* If an answer was already submitted and we navigated back, show the feedback briefly */}
-            {answers[currentQuestion.id] && currentText === answers[currentQuestion.id].text && !isSubmitting && (
+            {/* Show previous feedback if it exists and we're not loading */}
+            {currentAnswerState?.feedback && currentAnswerState.evaluationStatus !== 'loading' && currentAnswerState.evaluationStatus !== 'none' && (
               <div className={styles.feedback}>
-                <strong>Previous Feedback:</strong> {answers[currentQuestion.id].feedback}
+                <strong>Previous Feedback:</strong> {currentAnswerState.feedback}
               </div>
             )}
           </div>
