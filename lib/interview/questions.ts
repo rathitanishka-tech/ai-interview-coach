@@ -10,6 +10,8 @@ export interface Question {
   id: string;
   text: string;
   category: string;
+  isFollowUp?: boolean;
+  originalId?: string;
 }
 
 const QUESTION_BANK: Record<string, Record<string, string[]>> = {

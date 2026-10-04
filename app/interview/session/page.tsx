@@ -39,6 +39,7 @@ export default function SessionPage() {
 
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
   const [sessionId] = useState(() => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
+  const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -170,6 +171,35 @@ export default function SessionPage() {
           evaluation: aiEval
         }
       }));
+
+      if (aiEval.followUpQuestion) {
+        const originalId = question.originalId || question.id;
+        const currentCount = followUpCounts[originalId] || 0;
+        
+        if (currentCount < 2) {
+          const newQId = `${originalId}-fup-${currentCount + 1}`;
+          const newQuestion: Question = {
+            id: newQId,
+            text: aiEval.followUpQuestion,
+            category: question.category,
+            isFollowUp: true,
+            originalId
+          };
+
+          setQuestions(prev => {
+            const nextQuestions = [...prev];
+            // Insert immediately after the current question index
+            // Find the index of the *current* question being answered
+            const qIndex = nextQuestions.findIndex(q => q.id === question.id);
+            if (qIndex >= 0) {
+              nextQuestions.splice(qIndex + 1, 0, newQuestion);
+            }
+            return nextQuestions;
+          });
+
+          setFollowUpCounts(prev => ({ ...prev, [originalId]: currentCount + 1 }));
+        }
+      }
     } catch (e) {
       let errorCode = "UNKNOWN_ERROR";
       if (e instanceof Error) {
@@ -271,9 +301,14 @@ export default function SessionPage() {
               {questions.map((q, i) => {
                 const ans = answers[q.id];
                 if (!ans || !ans.text.trim()) return null;
+                
+                const origIndex = questions.slice(0, i + 1).filter(item => !item.isFollowUp).length;
+                const fupIndex = questions.slice(0, i + 1).filter(item => item.originalId === (q.originalId || q.id) && item.isFollowUp).length;
+                const prefix = q.isFollowUp ? `Q${origIndex}.${fupIndex}` : `Q${origIndex}`;
+                
                 return (
                   <div key={q.id} className={styles.answerItem}>
-                    <div className={styles.answerQ}>Q{i + 1}: {q.text}</div>
+                    <div className={styles.answerQ}>{prefix}: {q.text}</div>
                     <div className={styles.answerA}>{ans.text}</div>
                     
                     {ans.evaluationStatus === 'evaluated' && ans.evaluation ? (
@@ -338,6 +373,10 @@ export default function SessionPage() {
   const currentQuestion = questions[currentIndex];
   if (!currentQuestion) return null;
 
+  const originalIndex = questions.slice(0, currentIndex + 1).filter(q => !q.isFollowUp).length;
+  const followUpIndex = questions.slice(0, currentIndex + 1).filter(q => q.originalId === (currentQuestion.originalId || currentQuestion.id) && q.isFollowUp).length;
+  const questionNumberDisplay = currentQuestion.isFollowUp ? `Q${originalIndex}.${followUpIndex}` : `Q${originalIndex}`;
+
   const currentAnswerState = answers[currentQuestion.id];
   const currentText = currentAnswerState?.text || "";
   const isSubmitting = currentAnswerState?.evaluationStatus === 'loading';
@@ -359,9 +398,11 @@ export default function SessionPage() {
         <div className={styles.workspace}>
           
           <div className={styles.questionHeader}>
-            <div className={styles.badge}>{currentQuestion.category}</div>
+            <div className={styles.badge}>
+              {currentQuestion.category} {currentQuestion.isFollowUp && "• Follow-up"}
+            </div>
             <h2 className={styles.questionText}>
-              <span style={{ color: 'var(--color-primary)', marginRight: '8px' }}>Q{currentIndex + 1}.</span> 
+              <span style={{ color: 'var(--color-primary)', marginRight: '8px' }}>{questionNumberDisplay}.</span> 
               {currentQuestion.text}
             </h2>
           </div>
@@ -421,7 +462,7 @@ export default function SessionPage() {
             
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ marginRight: '1rem', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
-                {currentIndex + 1} of {questions.length}
+                {currentQuestion.isFollowUp ? `Follow-up ${followUpIndex} for Question ${originalIndex}` : `Question ${originalIndex} of ${config.questions}`}
               </span>
               <button className={styles.btnPrimary} onClick={handleNext} disabled={isSubmitting}>
                 {isSubmitting ? "Evaluating..." : currentIndex === questions.length - 1 ? "Finish Interview" : "Submit Answer"}

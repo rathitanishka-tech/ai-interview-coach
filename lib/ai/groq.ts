@@ -23,6 +23,7 @@ export interface EvaluationResult {
   improvements: string[];
   feedback: string;
   idealAnswer: string;
+  followUpQuestion?: string | null;
 }
 
 export async function evaluateInterviewAnswerGroq(
@@ -49,6 +50,13 @@ Context:
 - Interview Type: ${type}
 - Difficulty: ${difficulty}
 
+Adaptive Follow-up Strategy:
+- Strong answer (80-100): Ask a deeper, more challenging follow-up question exploring trade-offs, edge cases, optimization, or real-world implementation.
+- Moderate answer (60-79): Ask a practical application or clarification question to test whether the candidate understands how to apply the concept.
+- Weak answer (0-59): Ask a simpler conceptual question to help identify missing fundamental knowledge.
+- Irrelevant/Invalid answer: Ask a gentle redirecting question related to the original topic. Do not reward irrelevant answers with artificially high scores.
+- Do not repeat the original question. Keep the follow-up concise.
+
 You must return ONLY a JSON object containing EXACTLY these keys:
 - score (integer 0-100)
 - technicalAccuracy (integer 0-100)
@@ -58,7 +66,8 @@ You must return ONLY a JSON object containing EXACTLY these keys:
 - strengths (array of strings)
 - improvements (array of strings)
 - feedback (string paragraph)
-- idealAnswer (string)`;
+- idealAnswer (string)
+- followUpQuestion (string or null)`;
 
       const prompt = `Question: ${question}\nCandidate Answer: ${answer}`;
 
