@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import styles from "./session.module.css";
-import { InterviewConfig, Question, getQuestions, evaluateAnswer } from "@/lib/interview/questions";
+import { InterviewConfig, Question, getQuestions, evaluateAnswer, getQuestionsByDifficulty } from "@/lib/interview/questions";
 
 interface AnswerState {
   questionId: string;
@@ -40,6 +40,9 @@ export default function SessionPage() {
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
   const [sessionId] = useState(() => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
   const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
+  
+  const [currentDifficulty, setCurrentDifficulty] = useState<string>("");
+  const [, setPerformanceStreak] = useState<number>(0);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -49,6 +52,7 @@ export default function SessionPage() {
       if (saved) {
         const parsed = JSON.parse(saved);
         setConfig(parsed);
+        setCurrentDifficulty(parsed.difficulty);
         setQuestions(getQuestions(parsed));
         setStartTime(Date.now());
       }
@@ -70,7 +74,7 @@ export default function SessionPage() {
       let totalScore = 0;
       let evaluatedCount = 0;
       Object.values(answers).forEach(ans => {
-        if (ans.evaluation) {
+        if (ans.evaluation && ans.evaluationStatus === 'evaluated') {
           totalScore += ans.evaluation.score;
           evaluatedCount++;
         }
@@ -172,6 +176,62 @@ export default function SessionPage() {
         }
       }));
 
+      if (!question.isFollowUp && config) {
+        setPerformanceStreak(prevStreak => {
+          let newStreak = prevStreak;
+          if (aiEval.score >= 80) newStreak++;
+          else if (aiEval.score < 60) newStreak--;
+          else newStreak = newStreak > 0 ? newStreak - 1 : newStreak < 0 ? newStreak + 1 : 0;
+          
+          let newDifficulty = currentDifficulty;
+          if (newStreak >= 2) {
+             newDifficulty = newDifficulty === "Easy" ? "Medium" : newDifficulty === "Medium" ? "Hard" : "Hard";
+             newStreak = 0;
+          } else if (newStreak <= -2) {
+             newDifficulty = newDifficulty === "Hard" ? "Medium" : newDifficulty === "Medium" ? "Easy" : "Easy";
+             newStreak = 0;
+          }
+          
+          if (newDifficulty !== currentDifficulty) {
+             setCurrentDifficulty(newDifficulty);
+             
+             setQuestions(currQs => {
+                const excludeTexts = currQs.map(q => q.text);
+                
+                let originalQuestionsToReplace = 0;
+                for (let i = 0; i < currQs.length; i++) {
+                   if (!currQs[i].isFollowUp && i > currentIndex) {
+                       originalQuestionsToReplace++;
+                   }
+                }
+                
+                if (originalQuestionsToReplace > 0) {
+                   const replacements = getQuestionsByDifficulty(config, originalQuestionsToReplace, newDifficulty, excludeTexts);
+                   
+                   const finalQs = [...currQs];
+                   let replIdx = 0;
+                   for (let i = 0; i < finalQs.length; i++) {
+                      if (!finalQs[i].isFollowUp && i > currentIndex) {
+                          if (replIdx < replacements.length) {
+                             finalQs[i] = {
+                               ...finalQs[i],
+                               text: replacements[replIdx].text,
+                               category: replacements[replIdx].category,
+                               difficulty: newDifficulty
+                             };
+                             replIdx++;
+                          }
+                      }
+                   }
+                   return finalQs;
+                }
+                return currQs;
+             });
+          }
+          return newStreak;
+        });
+      }
+
       if (aiEval.followUpQuestion) {
         const originalId = question.originalId || question.id;
         const currentCount = followUpCounts[originalId] || 0;
@@ -219,15 +279,32 @@ export default function SessionPage() {
       
       console.warn(`Evaluation failed for ${question.id}. Using fallback.`, errorCode);
       const fallbackFeedback = evaluateAnswer(text);
+      // Fallback guarantees score of 65 so it maintains streak neutrally
+      const fallbackScore = 65;
+      
       setAnswers(prev => ({
         ...prev,
         [question.id]: {
           ...prev[question.id],
           evaluationStatus: 'fallback',
           feedback: fallbackFeedback,
-          aiError: displayMsg
+          aiError: displayMsg,
+          evaluation: {
+            score: fallbackScore,
+            technicalAccuracy: 65,
+            relevance: 65,
+            completeness: 65,
+            communication: 65,
+            strengths: ["Provided an answer"],
+            improvements: ["Unable to evaluate deeply due to service error"],
+            idealAnswer: "N/A"
+          }
         }
       }));
+      
+      if (!question.isFollowUp) {
+        setPerformanceStreak(prev => prev > 0 ? prev - 1 : prev < 0 ? prev + 1 : 0);
+      }
     }
   };
 
@@ -305,10 +382,16 @@ export default function SessionPage() {
                 const origIndex = questions.slice(0, i + 1).filter(item => !item.isFollowUp).length;
                 const fupIndex = questions.slice(0, i + 1).filter(item => item.originalId === (q.originalId || q.id) && item.isFollowUp).length;
                 const prefix = q.isFollowUp ? `Q${origIndex}.${fupIndex}` : `Q${origIndex}`;
+                const displayDiff = q.difficulty || config?.difficulty || "Medium";
                 
                 return (
                   <div key={q.id} className={styles.answerItem}>
-                    <div className={styles.answerQ}>{prefix}: {q.text}</div>
+                    <div className={styles.answerQ}>
+                      {prefix}: {q.text}
+                      <span style={{ fontSize: '0.8rem', marginLeft: '8px', padding: '2px 6px', background: 'var(--color-bg-secondary)', borderRadius: '4px' }}>
+                        {displayDiff}
+                      </span>
+                    </div>
                     <div className={styles.answerA}>{ans.text}</div>
                     
                     {ans.evaluationStatus === 'evaluated' && ans.evaluation ? (
@@ -399,7 +482,8 @@ export default function SessionPage() {
           
           <div className={styles.questionHeader}>
             <div className={styles.badge}>
-              {currentQuestion.category} {currentQuestion.isFollowUp && "• Follow-up"}
+              {currentQuestion.category} • {currentQuestion.difficulty || currentDifficulty} 
+              {currentQuestion.isFollowUp && " • Follow-up"}
             </div>
             <h2 className={styles.questionText}>
               <span style={{ color: 'var(--color-primary)', marginRight: '8px' }}>{questionNumberDisplay}.</span> 
