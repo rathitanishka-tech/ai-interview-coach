@@ -5,6 +5,7 @@ import Link from "next/link";
 import styles from "./history.module.css";
 import { getInterviewHistory, InterviewHistoryRecord } from "@/lib/interview/storage";
 import { getAnalyticsData, WEAKNESS_THRESHOLD } from "@/lib/interview/analytics";
+import { ReadinessGauge } from "@/components/ReadinessGauge";
 
 export default function HistoryPage() {
   const [history, setHistory] = useState<InterviewHistoryRecord[]>([]);
@@ -74,6 +75,8 @@ export default function HistoryPage() {
               </svg>
               <span><strong>Note:</strong> These scores are AI-generated estimates to guide your preparation and refine your communication, not objective certifications.</span>
             </div>
+
+            <ReadinessGauge readiness={analytics.readiness} />
 
             <div className={styles.statsGrid}>
               <div className={styles.statCard}>

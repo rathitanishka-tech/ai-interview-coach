@@ -1,0 +1,144 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 2.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  text-align: center;
+}
+
+.gaugeContainer {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 1.5rem;
+}
+
+.gaugeSvg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gaugeBackground {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 12;
+}
+
+.gaugeProgress {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ready { stroke: #10b981; }
+.approaching { stroke: #f59e0b; }
+.needsPractice { stroke: #ef4444; }
+
+.gaugeText {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.scoreValue {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.scoreLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}
+
+.statusText {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.explanation {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  max-width: 600px;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+.breakdownGrid {
+  display: flex;
+  gap: 2rem;
+  width: 100%;
+  max-width: 600px;
+  justify-content: space-between;
+}
+
+.breakdownItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.breakdownLabel {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.breakdownBarContainer {
+  width: 100%;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.breakdownBar {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 3px;
+  transition: width 1s ease-in-out;
+}
+
+.clusterCount {
+  margin-top: 2rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border);
+  padding-top: 1rem;
+  width: 100%;
+  max-width: 300px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gaugeProgress,
+  .breakdownBar {
+    transition: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .breakdownGrid {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .breakdownItem {
+    width: 100%;
+  }
+}

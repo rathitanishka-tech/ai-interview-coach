@@ -11,6 +11,18 @@ export interface Weakness {
   recommendation: string;
 }
 
+export interface ReadinessData {
+  score: number | null; // null if insufficient data
+  breakdown: {
+    baseScore: number;
+    consistency: number;
+    difficulty: number;
+  };
+  status: 'Interview Ready' | 'Approaching Readiness' | 'Needs Practice' | 'Insufficient Data';
+  clusterCount: number;
+  explanation: string;
+}
+
 export interface AnalyticsData {
   totalInterviews: number;
   totalQuestions: number;
@@ -22,6 +34,7 @@ export interface AnalyticsData {
   avgComm: number;
   trendData: InterviewHistoryRecord[];
   weaknesses: Weakness[];
+  readiness: ReadinessData;
 }
 
 export const WEAKNESS_THRESHOLD = 80;
@@ -134,6 +147,122 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
     )
     .sort((a, b) => a.avg - b.avg);
 
+  // --- Phase 10A: Readiness Calculation ---
+  const clusters: { score: number, difficulty: string }[] = [];
+  
+  trendData.forEach(record => {
+    const recordClusters: Record<string, { total: number, count: number, diff: string }> = {};
+    
+    record.questions.forEach(q => {
+      const ans = record.answers[q.id];
+      if (ans && ans.evaluationStatus === 'evaluated' && ans.evaluation) {
+        const clusterId = q.originalId || q.id;
+        if (!recordClusters[clusterId]) {
+          recordClusters[clusterId] = { total: 0, count: 0, diff: q.difficulty || "Medium" };
+        }
+        recordClusters[clusterId].total += ans.evaluation.score;
+        recordClusters[clusterId].count++;
+        if (!q.isFollowUp && q.difficulty) {
+          recordClusters[clusterId].diff = q.difficulty;
+        }
+      }
+    });
+    
+    Object.values(recordClusters).forEach(c => {
+      if (c.count > 0) {
+        clusters.push({ score: c.total / c.count, difficulty: c.diff });
+      }
+    });
+  });
+
+  const clusterCount = clusters.length;
+  let readiness: ReadinessData = {
+    score: null,
+    breakdown: { baseScore: 0, consistency: 0, difficulty: 0 },
+    status: 'Insufficient Data',
+    clusterCount,
+    explanation: "Complete at least 5 evaluated questions to generate your Readiness Score."
+  };
+
+  if (clusterCount >= 5) {
+    // 1. Base Score (Max 70 points)
+    const baseRaw = 70 * (
+      (avgTech / 100) * 0.35 +
+      (avgRel / 100) * 0.25 +
+      (avgComp / 100) * 0.20 +
+      (avgComm / 100) * 0.20
+    );
+    const baseScore = Math.max(0, Math.min(70, baseRaw));
+
+    // 2. Consistency Score (Max 15 points)
+    const mean = clusters.reduce((sum, c) => sum + c.score, 0) / clusterCount;
+    const variance = clusters.reduce((sum, c) => sum + Math.pow(c.score - mean, 2), 0) / clusterCount;
+    let sd = Math.sqrt(variance);
+
+    // Calculate linear trend (slope) to detect improvement
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    clusters.forEach((c, i) => {
+        sumX += i;
+        sumY += c.score;
+        sumXY += i * c.score;
+        sumX2 += i * i;
+    });
+    const slope = clusterCount > 1 ? (clusterCount * sumXY - sumX * sumY) / (clusterCount * sumX2 - sumX * sumX) : 0;
+    
+    // If improving, forgive some variance conservatively (max 5 points of SD or 30% of SD)
+    if (slope > 0) {
+        const maxForgiveness = Math.min(5, sd * 0.3);
+        const actualForgiveness = Math.min(maxForgiveness, slope * 2);
+        sd = Math.max(0, sd - actualForgiveness); 
+    }
+
+    // Map SD to 15 points (SD of 0 = 15, SD >= 25 = 0)
+    const consistency = Math.max(0, Math.min(15, 15 - (sd / 25) * 15));
+
+    // 3. Difficulty Index (Max 15 points)
+    const masteredClusters = clusters.filter(c => c.score >= 75);
+    let difficulty = 0;
+    if (masteredClusters.length > 0) {
+      let diffSum = 0;
+      masteredClusters.forEach(c => {
+          if (c.difficulty === "Hard") diffSum += 1.0;
+          else if (c.difficulty === "Medium") diffSum += 0.66;
+          else diffSum += 0.33; // Easy or unrecognized (legacy)
+      });
+      const avgMultiplier = diffSum / masteredClusters.length;
+      difficulty = Math.max(0, Math.min(15, avgMultiplier * 15));
+    }
+
+    const finalScore = Math.max(0, Math.min(100, Math.round(baseScore + consistency + difficulty)));
+    
+    let status: ReadinessData['status'] = 'Needs Practice';
+    if (finalScore >= 80 && difficulty >= 7) {
+      status = 'Interview Ready';
+    } else if (finalScore >= 60) {
+      status = 'Approaching Readiness';
+    }
+
+    // Generate grounded explanation
+    let explanation = "Your core technical and communication skills are establishing a solid baseline.";
+    if (difficulty < 7) {
+      explanation = "You are demonstrating consistency, but your score is limited because you haven't mastered enough Medium or Hard questions. Challenge yourself to increase your readiness.";
+    } else if (consistency < 8) {
+      explanation = "Your performance is highly inconsistent. Focus on structuring your answers reliably across all topics, even ones you find difficult.";
+    } else if (finalScore >= 80) {
+      explanation = "You are demonstrating strong, consistent mastery across challenging topics. While this doesn't guarantee passing a real interview, your fundamentals are highly competitive.";
+    } else if (finalScore >= 60) {
+      explanation = "You are approaching readiness. Focus on your specific weaknesses below to bridge the gap to a competitive level.";
+    }
+
+    readiness = {
+      score: finalScore,
+      breakdown: { baseScore, consistency, difficulty },
+      status,
+      clusterCount,
+      explanation
+    };
+  }
+
   return {
     totalInterviews,
     totalQuestions,
@@ -144,6 +273,7 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
     avgComp,
     avgComm,
     trendData,
-    weaknesses
+    weaknesses,
+    readiness
   };
 }
