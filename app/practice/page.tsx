@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import styles from "./practice.module.css";
-import { getPracticeState, toggleTaskCompletion, PracticeState } from "@/lib/practice/storage";
+import { getPracticeState, toggleTaskCompletion, PracticeState, PracticeTask } from "@/lib/practice/storage";
 
 const DIMENSION_LABELS: Record<string, string> = {
   technicalAccuracy: "Technical Accuracy",
@@ -14,6 +15,7 @@ const DIMENSION_LABELS: Record<string, string> = {
 };
 
 export default function PracticePage() {
+  const router = useRouter();
   const [state, setState] = useState<PracticeState | null>(null);
   const [error, setError] = useState<boolean>(false);
 
@@ -34,6 +36,21 @@ export default function PracticePage() {
       setState(newState);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleStartPractice = (task: PracticeTask) => {
+    if (task.practiceType === 'question' && task.questionPayload && task.context) {
+      sessionStorage.setItem("interviewConfig", JSON.stringify({
+        role: task.context.role,
+        experience: "Practice",
+        type: task.context.type,
+        difficulty: task.context.difficulty,
+        questions: 1
+      }));
+      sessionStorage.setItem("practiceQuestion", JSON.stringify(task.questionPayload));
+      sessionStorage.setItem("practiceTaskId", task.id);
+      router.push("/interview/session");
     }
   };
 
@@ -122,9 +139,25 @@ export default function PracticePage() {
                   </div>
                   <h3 className={styles.taskTitle}>{task.title}</h3>
                   <p className={styles.taskDesc}>{task.description}</p>
-                  <div className={styles.taskReason}>
-                    Why: {reason}
-                  </div>
+                  
+                  {task.practiceType === 'question' && task.questionPayload && (
+                    <div className={styles.questionPreview}>
+                      <div className={styles.questionBadge}>{task.context?.difficulty} {task.context?.type}</div>
+                      <div className={styles.questionText}>&quot;{task.questionPayload.text}&quot;</div>
+                      <button 
+                        className={styles.startPracticeBtn} 
+                        onClick={() => handleStartPractice(task)}
+                      >
+                        Start Practice Session
+                      </button>
+                    </div>
+                  )}
+
+                  {task.practiceType !== 'question' && (
+                    <div className={styles.taskReason}>
+                      Why: {reason}
+                    </div>
+                  )}
                 </div>
               </div>
             );

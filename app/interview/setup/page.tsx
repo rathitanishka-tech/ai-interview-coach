@@ -44,6 +44,8 @@ export default function SetupPage() {
     const config = { role, experience, type, difficulty, questions };
     try {
       sessionStorage.setItem("interviewConfig", JSON.stringify(config));
+      sessionStorage.removeItem("practiceQuestion");
+      sessionStorage.removeItem("practiceTaskId");
     } catch (e) {
       console.warn("Failed to save to sessionStorage", e);
     }

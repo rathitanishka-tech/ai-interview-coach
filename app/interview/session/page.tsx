@@ -49,11 +49,16 @@ export default function SessionPage() {
     setMounted(true);
     try {
       const saved = sessionStorage.getItem("interviewConfig");
+      const practiceQ = sessionStorage.getItem("practiceQuestion");
       if (saved) {
         const parsed = JSON.parse(saved);
         setConfig(parsed);
         setCurrentDifficulty(parsed.difficulty);
-        setQuestions(getQuestions(parsed));
+        if (practiceQ) {
+          setQuestions([JSON.parse(practiceQ)]);
+        } else {
+          setQuestions(getQuestions(parsed));
+        }
         setStartTime(Date.now());
       }
     } catch (e) {
@@ -92,6 +97,15 @@ export default function SessionPage() {
           totalTimeSeconds: elapsedTime
         });
       });
+
+      const practiceTaskId = sessionStorage.getItem("practiceTaskId");
+      if (practiceTaskId) {
+        import("@/lib/practice/storage").then(({ toggleTaskCompletion }) => {
+          toggleTaskCompletion(practiceTaskId, true);
+          sessionStorage.removeItem("practiceTaskId");
+          sessionStorage.removeItem("practiceQuestion");
+        }).catch(e => console.warn("Failed to complete practice task", e));
+      }
     }
   }, [mounted, isCompleted, isProcessingQueue, answers, config, questions, startTime, elapsedTime, sessionId]);
 
@@ -405,13 +419,13 @@ export default function SessionPage() {
                           <div className={styles.evalBox}>
                             <h4>Strengths</h4>
                             <ul>
-                              {ans.evaluation.strengths.map((s, idx) => <li key={idx}>{s}</li>)}
+                              {ans.evaluation.strengths?.map((s, idx) => <li key={idx}>{s}</li>)}
                             </ul>
                           </div>
                           <div className={styles.evalBox}>
                             <h4>Areas to Improve</h4>
                             <ul>
-                              {ans.evaluation.improvements.map((s, idx) => <li key={idx}>{s}</li>)}
+                              {ans.evaluation.improvements?.map((s, idx) => <li key={idx}>{s}</li>)}
                             </ul>
                           </div>
                         </div>
