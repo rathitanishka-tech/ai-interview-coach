@@ -175,6 +175,42 @@ export default function HistoryPage() {
               )}
             </div>
 
+            {/* Phase 10B.2: Answer Pattern Detection Section */}
+            <div className={styles.analyticsSection}>
+              <h2 className={styles.sectionTitle}>Recurring Patterns</h2>
+              
+              {analytics.patternsStatus === 'Insufficient Data' ? (
+                <div className={styles.emptyState} style={{ padding: '3rem 2rem' }}>
+                  <h2>Keep Practicing</h2>
+                  <p>Complete at least 5 evaluated questions to unlock deterministic pattern detection based on your AI feedback.</p>
+                </div>
+              ) : analytics.patternsStatus === 'No Patterns Detected' ? (
+                <div className={styles.emptyState} style={{ padding: '3rem 2rem', borderLeft: '4px solid #4CAF50' }}>
+                  <h2>Great Form!</h2>
+                  <p>We haven&apos;t detected any recurring anti-patterns or structural weaknesses in your recent answers.</p>
+                </div>
+              ) : (
+                <div className={styles.patternsGrid}>
+                  {analytics.patterns.map((p) => {
+                    let severityClass = styles.patternSeverityMedium;
+                    if (p.severity === 'high') severityClass = styles.patternSeverityHigh;
+                    else if (p.severity === 'low') severityClass = styles.patternSeverityLow;
+
+                    return (
+                      <div key={p.id} className={styles.patternCard}>
+                        <div className={styles.patternHeader}>
+                          <h3 className={styles.patternTitle}>{p.title}</h3>
+                          <div className={styles.patternFrequency}>{p.frequency} instances</div>
+                        </div>
+                        <p className={styles.patternDesc}>{p.description}</p>
+                        <div className={severityClass}>Severity: {p.severity}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* AI Weakness Detection Section */}
             <div className={styles.analyticsSection}>
               <h2 className={styles.sectionTitle}>Targeted Improvements</h2>

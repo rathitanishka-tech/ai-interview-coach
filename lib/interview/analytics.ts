@@ -23,6 +23,15 @@ export interface ReadinessData {
   explanation: string;
 }
 
+export interface AnswerPattern {
+  id: string;
+  title: string;
+  description: string;
+  frequency: number;
+  affectedClusters: number;
+  severity: 'high' | 'medium' | 'low';
+}
+
 export interface AnalyticsData {
   totalInterviews: number;
   totalQuestions: number;
@@ -35,6 +44,8 @@ export interface AnalyticsData {
   trendData: InterviewHistoryRecord[];
   weaknesses: Weakness[];
   readiness: ReadinessData;
+  patterns: AnswerPattern[];
+  patternsStatus: 'Insufficient Data' | 'No Patterns Detected' | 'Patterns Detected';
 }
 
 export const WEAKNESS_THRESHOLD = 80;
@@ -147,20 +158,42 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
     )
     .sort((a, b) => a.avg - b.avg);
 
-  // --- Phase 10A: Readiness Calculation ---
-  const clusters: { score: number, difficulty: string }[] = [];
+  // --- Phase 10A & 10B.1: Readiness & Pattern Calculation ---
+  const clusters: { 
+    score: number, 
+    difficulty: string,
+    avgTech: number,
+    avgRel: number,
+    avgComp: number,
+    avgComm: number,
+    improvements: string[]
+  }[] = [];
   
   trendData.forEach(record => {
-    const recordClusters: Record<string, { total: number, count: number, diff: string }> = {};
+    const recordClusters: Record<string, { 
+      total: number, count: number, diff: string,
+      tech: number, rel: number, comp: number, comm: number,
+      improvements: string[]
+    }> = {};
     
     record.questions.forEach(q => {
       const ans = record.answers[q.id];
       if (ans && ans.evaluationStatus === 'evaluated' && ans.evaluation) {
         const clusterId = q.originalId || q.id;
         if (!recordClusters[clusterId]) {
-          recordClusters[clusterId] = { total: 0, count: 0, diff: q.difficulty || "Medium" };
+          recordClusters[clusterId] = { 
+            total: 0, count: 0, diff: q.difficulty || "Medium",
+            tech: 0, rel: 0, comp: 0, comm: 0, improvements: []
+          };
         }
         recordClusters[clusterId].total += ans.evaluation.score;
+        recordClusters[clusterId].tech += ans.evaluation.technicalAccuracy;
+        recordClusters[clusterId].rel += ans.evaluation.relevance;
+        recordClusters[clusterId].comp += ans.evaluation.completeness;
+        recordClusters[clusterId].comm += ans.evaluation.communication;
+        if (ans.evaluation.improvements && Array.isArray(ans.evaluation.improvements)) {
+          recordClusters[clusterId].improvements.push(...ans.evaluation.improvements);
+        }
         recordClusters[clusterId].count++;
         if (!q.isFollowUp && q.difficulty) {
           recordClusters[clusterId].diff = q.difficulty;
@@ -170,7 +203,15 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
     
     Object.values(recordClusters).forEach(c => {
       if (c.count > 0) {
-        clusters.push({ score: c.total / c.count, difficulty: c.diff });
+        clusters.push({ 
+          score: c.total / c.count, 
+          difficulty: c.diff,
+          avgTech: c.tech / c.count,
+          avgRel: c.rel / c.count,
+          avgComp: c.comp / c.count,
+          avgComm: c.comm / c.count,
+          improvements: c.improvements
+        });
       }
     });
   });
@@ -263,6 +304,107 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
     };
   }
 
+  // --- Phase 10B.1: Pattern Detection ---
+  const patterns: AnswerPattern[] = [];
+  let patternsStatus: AnalyticsData['patternsStatus'] = 'Insufficient Data';
+
+  if (clusterCount >= 5) {
+    let missingExamplesCount = 0;
+    let vagueCount = 0;
+    let weakTechCount = 0;
+    let offTopicCount = 0;
+    let commIssuesCount = 0;
+
+    clusters.forEach(c => {
+      // Normalize improvements text safely
+      const allImprovements = c.improvements.map(i => i.toLowerCase()).join(" ");
+
+      // Missing examples: low completeness AND explicit example keywords
+      if (c.avgComp < 80 && /\b(example|concrete|scenario|instance|star method|demonstrate)\b/.test(allImprovements)) {
+        missingExamplesCount++;
+      }
+      
+      // Vague explanations: low completeness AND vagueness/detail keywords
+      if (c.avgComp < 80 && /\b(vague|detail|elaborate|incomplete|expand|deepen|shallow)\b/.test(allImprovements)) {
+        vagueCount++;
+      }
+
+      // Weak technical reasoning: purely dimension-driven (must be low)
+      if (c.avgTech < 70) {
+        weakTechCount++;
+      }
+
+      // Off-topic answers: low relevance AND tangent keywords
+      if (c.avgRel < 80 && /\b(tangent|focus|directly answer|stray|irrelevant|off-topic)\b/.test(allImprovements)) {
+        offTopicCount++;
+      }
+
+      // Communication issues: low comm AND clarity/structure keywords
+      if (c.avgComm < 80 && /\b(structure|clear|clarity|flow|filler|concise|ramble)\b/.test(allImprovements)) {
+        commIssuesCount++;
+      }
+    });
+
+    if (missingExamplesCount >= 3) {
+      patterns.push({
+        id: 'missing_examples',
+        title: 'Missing Concrete Examples',
+        description: 'You frequently provide theoretical answers without grounding them in concrete scenarios or past experiences.',
+        frequency: missingExamplesCount,
+        affectedClusters: clusterCount,
+        severity: missingExamplesCount >= 5 ? 'high' : 'medium'
+      });
+    }
+
+    if (vagueCount >= 3) {
+      patterns.push({
+        id: 'vague_explanations',
+        title: 'Vague or Incomplete Explanations',
+        description: 'Your answers often lack sufficient detail or depth to fully satisfy the prompt.',
+        frequency: vagueCount,
+        affectedClusters: clusterCount,
+        severity: vagueCount >= 5 ? 'high' : 'medium'
+      });
+    }
+
+    if (weakTechCount >= 3) {
+      patterns.push({
+        id: 'weak_tech',
+        title: 'Technical Knowledge Gaps',
+        description: 'You have consistently scored below standard on technical accuracy, suggesting fundamental knowledge gaps.',
+        frequency: weakTechCount,
+        affectedClusters: clusterCount,
+        severity: 'high'
+      });
+    }
+
+    if (offTopicCount >= 3) {
+      patterns.push({
+        id: 'off_topic',
+        title: 'Off-Topic or Tangential',
+        description: 'You tend to stray from the core question, focusing on irrelevant details instead of directly answering.',
+        frequency: offTopicCount,
+        affectedClusters: clusterCount,
+        severity: offTopicCount >= 5 ? 'high' : 'medium'
+      });
+    }
+
+    if (commIssuesCount >= 3) {
+      patterns.push({
+        id: 'comm_issues',
+        title: 'Poor Answer Structure',
+        description: 'Your responses frequently lack clarity, flow, or logical structure, making them harder to follow.',
+        frequency: commIssuesCount,
+        affectedClusters: clusterCount,
+        severity: commIssuesCount >= 5 ? 'high' : 'medium'
+      });
+    }
+
+    patternsStatus = patterns.length > 0 ? 'Patterns Detected' : 'No Patterns Detected';
+    // Sort patterns by frequency descending
+    patterns.sort((a, b) => b.frequency - a.frequency);
+  }
+
   return {
     totalInterviews,
     totalQuestions,
@@ -274,6 +416,8 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
     avgComm,
     trendData,
     weaknesses,
-    readiness
+    readiness,
+    patterns,
+    patternsStatus
   };
 }
