@@ -6,11 +6,13 @@ import styles from "./history.module.css";
 import { getInterviewHistory, InterviewHistoryRecord } from "@/lib/interview/storage";
 import { getAnalyticsData, WEAKNESS_THRESHOLD } from "@/lib/interview/analytics";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
+import { AnswerImprovementStudio } from "@/components/AnswerImprovementStudio";
 
 export default function HistoryPage() {
   const [history, setHistory] = useState<InterviewHistoryRecord[]>([]);
   const [mounted, setMounted] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [improvingAnswers, setImprovingAnswers] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -298,16 +300,39 @@ export default function HistoryPage() {
                                     <div className={styles.evalBox}>
                                       <h4>Strengths</h4>
                                       <ul>
-                                        {ans.evaluation.strengths.map((s, idx) => <li key={idx}>{s}</li>)}
+                                        {ans.evaluation.strengths?.map((s, idx) => <li key={idx}>{s}</li>)}
                                       </ul>
                                     </div>
                                     <div className={styles.evalBox}>
                                       <h4>Areas to Improve</h4>
                                       <ul>
-                                        {ans.evaluation.improvements.map((s, idx) => <li key={idx}>{s}</li>)}
+                                        {ans.evaluation.improvements?.map((s, idx) => <li key={idx}>{s}</li>)}
                                       </ul>
                                     </div>
                                   </div>
+                                  
+                                  {!improvingAnswers[q.id] && (
+                                    <div style={{ marginTop: '1.5rem' }}>
+                                      <button 
+                                        className={styles.btnSecondary}
+                                        onClick={() => setImprovingAnswers(prev => ({ ...prev, [q.id]: true }))}
+                                      >
+                                        Improve Answer with AI ✨
+                                      </button>
+                                    </div>
+                                  )}
+                                  
+                                  {improvingAnswers[q.id] && (
+                                    <AnswerImprovementStudio
+                                      sessionId={record.id}
+                                      question={q}
+                                      originalAnswer={ans.text}
+                                      evaluationContext={ans.feedback || "No feedback"}
+                                      config={record.config}
+                                      existingData={ans.improvementData}
+                                      onClose={() => setImprovingAnswers(prev => ({ ...prev, [q.id]: false }))}
+                                    />
+                                  )}
                                 </div>
                               ) : (
                                 <div className={styles.aiFeedback}>
