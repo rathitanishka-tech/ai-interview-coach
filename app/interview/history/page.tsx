@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import styles from "./history.module.css";
 import { getInterviewHistory, InterviewHistoryRecord } from "@/lib/interview/storage";
+import { getAnalyticsData, WEAKNESS_THRESHOLD } from "@/lib/interview/analytics";
 
 export default function HistoryPage() {
   const [history, setHistory] = useState<InterviewHistoryRecord[]>([]);
@@ -18,116 +19,28 @@ export default function HistoryPage() {
 
   if (!mounted) return null;
 
-  const totalInterviews = history.length;
-  const totalQuestions = history.reduce((acc, curr) => {
-    return acc + Object.keys(curr.answers).filter(k => curr.answers[k].text.trim()).length;
-  }, 0);
-  const averageScore = totalInterviews > 0 
-    ? Math.round(history.reduce((acc, curr) => acc + curr.overallScore, 0) / totalInterviews)
-    : 0;
+  const analytics = getAnalyticsData(history);
+  const { 
+    totalInterviews, 
+    totalQuestions, 
+    averageScore, 
+    evalCount, 
+    avgTech, 
+    avgRel, 
+    avgComp, 
+    avgComm, 
+    trendData, 
+    weaknesses 
+  } = analytics;
 
-  // Aggregation for Skill Analytics
-  let totalTech = 0, totalRel = 0, totalComp = 0, totalComm = 0;
-  let evalCount = 0;
-
-  history.forEach(record => {
-    Object.values(record.answers).forEach(ans => {
-      if (ans.evaluationStatus === 'evaluated' && ans.evaluation) {
-        totalTech += ans.evaluation.technicalAccuracy || 0;
-        totalRel += ans.evaluation.relevance || 0;
-        totalComp += ans.evaluation.completeness || 0;
-        totalComm += ans.evaluation.communication || 0;
-        evalCount++;
-      }
-    });
-  });
-
-  const avgTech = evalCount > 0 ? Math.round(totalTech / evalCount) : 0;
-  const avgRel = evalCount > 0 ? Math.round(totalRel / evalCount) : 0;
-  const avgComp = evalCount > 0 ? Math.round(totalComp / evalCount) : 0;
-  const avgComm = evalCount > 0 ? Math.round(totalComm / evalCount) : 0;
-
-  // Chronological data for Trend Chart
-  const trendData = [...history].sort((a, b) => a.timestamp - b.timestamp);
-
-  // Weakness Detection Logic
-  type DimensionKey = 'technicalAccuracy' | 'relevance' | 'completeness' | 'communication';
-  const dimensionLabels: Record<DimensionKey, string> = {
-    technicalAccuracy: "Technical Accuracy",
-    relevance: "Relevance",
-    completeness: "Completeness",
-    communication: "Communication"
+  const getTrendClass = (type: string) => {
+    switch (type) {
+      case 'improving': return styles.trendImproving;
+      case 'declining': return styles.trendDeclining;
+      case 'stable': return styles.trendStable;
+      default: return styles.trendInsufficient;
+    }
   };
-  const recommendationDict: Record<DimensionKey, string> = {
-    technicalAccuracy: "Review core concepts for your role. When uncertain, be honest about what you know and describe how you would find the answer rather than guessing.",
-    relevance: "Practice the STAR method. Ensure every sentence directly answers the prompt. Avoid going on tangents about unrelated technologies or experiences.",
-    completeness: "Use the Rule of 3. Ensure your answers have a clear beginning (context), middle (action/details), and end (results). Always include a concrete example.",
-    communication: "Record yourself answering mock questions. Focus on eliminating filler words, speaking at a measured pace, and structuring your thoughts logically."
-  };
-
-  const dimScores: Record<DimensionKey, number[]> = {
-    technicalAccuracy: [],
-    relevance: [],
-    completeness: [],
-    communication: []
-  };
-
-  trendData.forEach(record => {
-    Object.values(record.answers).forEach(ans => {
-      if (ans.evaluationStatus === 'evaluated' && ans.evaluation) {
-        dimScores.technicalAccuracy.push(ans.evaluation.technicalAccuracy);
-        dimScores.relevance.push(ans.evaluation.relevance);
-        dimScores.completeness.push(ans.evaluation.completeness);
-        dimScores.communication.push(ans.evaluation.communication);
-      }
-    });
-  });
-
-  const WEAKNESS_THRESHOLD = 80;
-  
-  const weaknesses = (Object.keys(dimScores) as DimensionKey[])
-    .map(key => {
-      const scores = dimScores[key];
-      if (scores.length === 0) return null;
-      const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-      
-      let trendStatus = "Insufficient trend data";
-      let trendClass = styles.trendInsufficient;
-      
-      if (scores.length >= 4) {
-        const half = Math.floor(scores.length / 2);
-        const olderHalf = scores.slice(0, half);
-        const newerHalf = scores.slice(half);
-        const olderAvg = olderHalf.reduce((a, b) => a + b, 0) / olderHalf.length;
-        const newerAvg = newerHalf.reduce((a, b) => a + b, 0) / newerHalf.length;
-        
-        if (newerAvg > olderAvg + 5) {
-          trendStatus = "Improving 📈";
-          trendClass = styles.trendImproving;
-        } else if (newerAvg < olderAvg - 5) {
-          trendStatus = "Declining 📉";
-          trendClass = styles.trendDeclining;
-        } else {
-          trendStatus = "Stable ➖";
-          trendClass = styles.trendStable;
-        }
-      }
-      
-      return {
-        key,
-        label: dimensionLabels[key],
-        avg,
-        trendStatus,
-        trendClass,
-        recommendation: recommendationDict[key]
-      };
-    })
-    .filter((w): w is NonNullable<typeof w> => 
-      w !== null && 
-      w.avg < WEAKNESS_THRESHOLD && 
-      dimScores[w.key].filter(score => score < WEAKNESS_THRESHOLD).length >= 2
-    )
-    .sort((a, b) => a.avg - b.avg); // Rank lowest first
 
   return (
     <div className={styles.container}>
@@ -135,6 +48,7 @@ export default function HistoryPage() {
         <Link href="/" className={styles.brand}>AI Interview Coach</Link>
         <nav className={styles.navLinks}>
           <Link href="/interview/setup" className={styles.navLink}>New Interview</Link>
+          <Link href="/practice" className={styles.navLink}>Practice Plan</Link>
         </nav>
       </header>
 
@@ -281,7 +195,7 @@ export default function HistoryPage() {
                           <h3 className={styles.weaknessTitle}>Priority {i + 1}: {w.label}</h3>
                           <div className={styles.weaknessScore}>Overall Average: <strong>{w.avg}/100</strong></div>
                         </div>
-                        <div className={`${styles.trendBadge} ${w.trendClass}`}>
+                        <div className={`${styles.trendBadge} ${getTrendClass(w.trendType)}`}>
                           {w.trendStatus}
                         </div>
                       </div>
