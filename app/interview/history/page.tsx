@@ -50,6 +50,85 @@ export default function HistoryPage() {
   // Chronological data for Trend Chart
   const trendData = [...history].sort((a, b) => a.timestamp - b.timestamp);
 
+  // Weakness Detection Logic
+  type DimensionKey = 'technicalAccuracy' | 'relevance' | 'completeness' | 'communication';
+  const dimensionLabels: Record<DimensionKey, string> = {
+    technicalAccuracy: "Technical Accuracy",
+    relevance: "Relevance",
+    completeness: "Completeness",
+    communication: "Communication"
+  };
+  const recommendationDict: Record<DimensionKey, string> = {
+    technicalAccuracy: "Review core concepts for your role. When uncertain, be honest about what you know and describe how you would find the answer rather than guessing.",
+    relevance: "Practice the STAR method. Ensure every sentence directly answers the prompt. Avoid going on tangents about unrelated technologies or experiences.",
+    completeness: "Use the Rule of 3. Ensure your answers have a clear beginning (context), middle (action/details), and end (results). Always include a concrete example.",
+    communication: "Record yourself answering mock questions. Focus on eliminating filler words, speaking at a measured pace, and structuring your thoughts logically."
+  };
+
+  const dimScores: Record<DimensionKey, number[]> = {
+    technicalAccuracy: [],
+    relevance: [],
+    completeness: [],
+    communication: []
+  };
+
+  trendData.forEach(record => {
+    Object.values(record.answers).forEach(ans => {
+      if (ans.evaluationStatus === 'evaluated' && ans.evaluation) {
+        dimScores.technicalAccuracy.push(ans.evaluation.technicalAccuracy);
+        dimScores.relevance.push(ans.evaluation.relevance);
+        dimScores.completeness.push(ans.evaluation.completeness);
+        dimScores.communication.push(ans.evaluation.communication);
+      }
+    });
+  });
+
+  const WEAKNESS_THRESHOLD = 80;
+  
+  const weaknesses = (Object.keys(dimScores) as DimensionKey[])
+    .map(key => {
+      const scores = dimScores[key];
+      if (scores.length === 0) return null;
+      const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+      
+      let trendStatus = "Insufficient trend data";
+      let trendClass = styles.trendInsufficient;
+      
+      if (scores.length >= 4) {
+        const half = Math.floor(scores.length / 2);
+        const olderHalf = scores.slice(0, half);
+        const newerHalf = scores.slice(half);
+        const olderAvg = olderHalf.reduce((a, b) => a + b, 0) / olderHalf.length;
+        const newerAvg = newerHalf.reduce((a, b) => a + b, 0) / newerHalf.length;
+        
+        if (newerAvg > olderAvg + 5) {
+          trendStatus = "Improving 📈";
+          trendClass = styles.trendImproving;
+        } else if (newerAvg < olderAvg - 5) {
+          trendStatus = "Declining 📉";
+          trendClass = styles.trendDeclining;
+        } else {
+          trendStatus = "Stable ➖";
+          trendClass = styles.trendStable;
+        }
+      }
+      
+      return {
+        key,
+        label: dimensionLabels[key],
+        avg,
+        trendStatus,
+        trendClass,
+        recommendation: recommendationDict[key]
+      };
+    })
+    .filter((w): w is NonNullable<typeof w> => 
+      w !== null && 
+      w.avg < WEAKNESS_THRESHOLD && 
+      dimScores[w.key].filter(score => score < WEAKNESS_THRESHOLD).length >= 2
+    )
+    .sort((a, b) => a.avg - b.avg); // Rank lowest first
+
   return (
     <div className={styles.container}>
       <header className={styles.topBar}>
@@ -175,6 +254,47 @@ export default function HistoryPage() {
                     </div>
                   </div>
                   
+                </div>
+              )}
+            </div>
+
+            {/* AI Weakness Detection Section */}
+            <div className={styles.analyticsSection}>
+              <h2 className={styles.sectionTitle}>Targeted Improvements</h2>
+              
+              {totalInterviews < 2 || evalCount < 5 ? (
+                <div className={styles.emptyState} style={{ padding: '3rem 2rem' }}>
+                  <h2>Keep Practicing</h2>
+                  <p>Complete at least 2 interviews and answer 5 questions to unlock recurring weakness detection and personalized recommendations.</p>
+                </div>
+              ) : weaknesses.length === 0 ? (
+                <div className={styles.emptyState} style={{ padding: '3rem 2rem', borderLeft: '4px solid #4CAF50' }}>
+                  <h2>Excellent Performance!</h2>
+                  <p>Your average scores are strong across all dimensions. Keep up the great work and try a harder difficulty level.</p>
+                </div>
+              ) : (
+                <div className={styles.weaknessGrid}>
+                  {weaknesses.map((w, i) => (
+                    <div key={w.key} className={styles.weaknessCard}>
+                      <div className={styles.weaknessHeader}>
+                        <div>
+                          <h3 className={styles.weaknessTitle}>Priority {i + 1}: {w.label}</h3>
+                          <div className={styles.weaknessScore}>Overall Average: <strong>{w.avg}/100</strong></div>
+                        </div>
+                        <div className={`${styles.trendBadge} ${w.trendClass}`}>
+                          {w.trendStatus}
+                        </div>
+                      </div>
+                      <p className={styles.weaknessReason}>
+                        You have consistently scored below our target benchmark of {WEAKNESS_THRESHOLD} in {w.label}. 
+                        This pattern was detected across {evalCount} AI-evaluated answers.
+                      </p>
+                      <div className={styles.recommendationBox}>
+                        <div className={styles.recommendationTitle}>Actionable Recommendation</div>
+                        <div className={styles.recommendationText}>{w.recommendation}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
