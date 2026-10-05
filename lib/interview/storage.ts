@@ -60,6 +60,7 @@ export function getInterviewHistory(): InterviewHistoryRecord[] {
     const parsed = JSON.parse(data);
     if (!Array.isArray(parsed)) return [];
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return parsed.map((record: any) => {
       // Normalization layer for legacy records
       const normalizedConfig = record.config || {};

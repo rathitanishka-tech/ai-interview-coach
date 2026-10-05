@@ -1,4 +1,4 @@
-import { InterviewHistoryRecord } from "./storage";
+import { InterviewHistoryRecord, AnswerState } from "./storage";
 
 export type DimensionKey = 'technicalAccuracy' | 'relevance' | 'completeness' | 'communication';
 
@@ -64,7 +64,7 @@ const recommendationDict: Record<DimensionKey, string> = {
   communication: "Record yourself answering mock questions. Focus on eliminating filler words, speaking at a measured pace, and structuring your thoughts logically."
 };
 
-function isGenuineEvaluation(ans: any): boolean {
+function isGenuineEvaluation(ans: AnswerState): boolean {
   if (ans.evaluationStatus !== 'evaluated' || !ans.evaluation) return false;
   // Exclude old fallback records disguised as genuine evaluations
   if (ans.evaluation.idealAnswer === "N/A" || (ans.evaluation.score === 65 && ans.evaluation.strengths?.includes("Provided an answer"))) {

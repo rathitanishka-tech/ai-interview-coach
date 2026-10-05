@@ -1,6 +1,7 @@
 import { getInterviewHistory } from "../interview/storage";
 import { getAnalyticsData, DimensionKey } from "../interview/analytics";
 import { getQuestionsByDifficulty, Question } from "../interview/questions";
+import { getRoadmap } from "../roadmap/storage";
 
 export interface PracticeTask {
   id: string;
@@ -180,14 +181,36 @@ export function getPracticeState(): PracticeState {
     return { lastGeneratedDate: today, tasks: [], completedTaskIds: [] };
   }
 
+  let retainedCompleted: string[] = [];
+  const activeRoadmap = getRoadmap();
+  const activeRoadmapId = activeRoadmap ? activeRoadmap.id : null;
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const state = JSON.parse(raw) as PracticeState;
       
+      // Filter out stale roadmap IDs
+      if (Array.isArray(state.completedTaskIds)) {
+        state.completedTaskIds = state.completedTaskIds.filter(id => {
+          if (id.startsWith('roadmap-')) {
+            return activeRoadmapId !== null && id.startsWith(activeRoadmapId);
+          }
+          // On same day, keep daily tasks. On new day, drop daily tasks.
+          return state.lastGeneratedDate === today;
+        });
+      }
+      
       // If the plan is from today, restore it (preserves completed tasks)
-      if (state.lastGeneratedDate === today && Array.isArray(state.tasks) && Array.isArray(state.completedTaskIds)) {
+      if (state.lastGeneratedDate === today && Array.isArray(state.tasks)) {
+        // Save cleaned state if modified
+        savePracticeState(state);
         return state;
+      }
+      
+      // On new day, retain only the cleaned roadmap completions
+      if (Array.isArray(state.completedTaskIds)) {
+        retainedCompleted = state.completedTaskIds;
       }
     }
   } catch (e) {
@@ -198,7 +221,7 @@ export function getPracticeState(): PracticeState {
   const newState: PracticeState = {
     lastGeneratedDate: today,
     tasks: generateNewPlan(),
-    completedTaskIds: [] // Fresh start for the new day
+    completedTaskIds: retainedCompleted
   };
 
   savePracticeState(newState);

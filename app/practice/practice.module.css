@@ -230,3 +230,139 @@
     gap: 1rem;
   }
 }
+
+.roadmapSection {
+  margin-bottom: 3rem;
+}
+
+.roadmapTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.roadmapDay {
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  background-color: var(--color-surface);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.roadmapDayHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background-color: rgba(var(--color-primary-rgb), 0.03);
+}
+
+.roadmapDayHeader h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--color-text);
+  font-family: var(--font-family-heading);
+}
+
+.roadmapDayCurrent {
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.1);
+}
+
+.roadmapDayCurrent .roadmapDayHeader {
+  background-color: rgba(var(--color-primary-rgb), 0.1);
+}
+
+.roadmapDayPast {
+  opacity: 0.7;
+}
+
+.roadmapDayLocked {
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+.badgeSuccess {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #10b981;
+  background-color: rgba(16, 185, 129, 0.1);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--border-radius-sm);
+}
+
+.roadmapCta {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.ctaCard {
+  background-color: rgba(var(--color-primary-rgb), 0.05);
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--border-radius-lg);
+  padding: 3rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.ctaCard h2 {
+  margin: 0;
+  font-family: var(--font-family-heading);
+  color: var(--color-text);
+}
+
+.ctaCard p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+.btnPrimary {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--border-radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btnPrimary:hover {
+  opacity: 0.9;
+}
+
+.btnSecondary {
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnSecondary:hover {
+  background-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.divider {
+  border: 0;
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 4rem 0;
+}
+
+.taskList {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
