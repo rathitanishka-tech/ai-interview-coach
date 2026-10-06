@@ -9,6 +9,16 @@ export interface CoachingAnalysis {
   practiceTip: string;
 }
 
+export interface InterviewerPerspective {
+  recruiterImpression: string;
+  positiveSignals: string[];
+  potentialConcerns: string[];
+  likelyFollowUps: string[];
+  hiringSignal: "Strong" | "Mixed" | "Weak";
+  hiringSignalExplanation: string;
+  howToImproveImpression: string;
+}
+
 export interface AnswerState {
   questionId: string;
   text: string;
@@ -26,6 +36,7 @@ export interface AnswerState {
     idealAnswer: string;
   };
   improvementData?: CoachingAnalysis;
+  interviewerPerspective?: InterviewerPerspective;
 }
 
 export interface InterviewHistoryRecord {
@@ -44,7 +55,32 @@ export function getInterviewHistory(): InterviewHistoryRecord[] {
   if (typeof window === "undefined") return [];
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    
+    return parsed.map((record: any) => {
+      // Normalization layer for legacy records
+      const normalizedConfig = record.config || {};
+      
+      return {
+        ...record,
+        id: record.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString() + Math.random().toString(36).substring(2)),
+        timestamp: record.timestamp || Date.now(),
+        config: {
+          role: normalizedConfig.role || "Unknown Role",
+          experience: normalizedConfig.experience || "Unknown",
+          type: normalizedConfig.type || "Unknown",
+          difficulty: normalizedConfig.difficulty || "Medium",
+          questions: normalizedConfig.questions || 1
+        },
+        questions: Array.isArray(record.questions) ? record.questions : [],
+        answers: record.answers || {},
+        overallScore: record.overallScore || 0,
+        totalTimeSeconds: record.totalTimeSeconds || 0,
+      } as InterviewHistoryRecord;
+    });
   } catch (error) {
     console.error("Failed to load interview history:", error);
     return [];
@@ -82,5 +118,22 @@ export function saveAnswerImprovement(sessionId: string, questionId: string, imp
     }
   } catch (error) {
     console.error("Failed to save answer improvement:", error);
+  }
+}
+
+export function saveInterviewerPerspective(sessionId: string, questionId: string, perspective: InterviewerPerspective): void {
+  if (typeof window === "undefined") return;
+  try {
+    const history = getInterviewHistory();
+    const recordIndex = history.findIndex(r => r.id === sessionId);
+    if (recordIndex >= 0) {
+      const record = history[recordIndex];
+      if (record.answers[questionId]) {
+        record.answers[questionId].interviewerPerspective = perspective;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+      }
+    }
+  } catch (error) {
+    console.error("Failed to save interviewer perspective:", error);
   }
 }

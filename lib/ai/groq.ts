@@ -93,8 +93,9 @@ You must return ONLY a JSON object containing EXACTLY these keys:
         // Determine if error is retryable
         const isRateLimit = msg.includes("429") || msg.includes("rate limit") || msg.includes("too many requests");
         const isUnavailable = msg.includes("503") || msg.includes("unavailable") || msg.includes("500");
+        const isMalformedJson = error.name === "SyntaxError" || msg.includes("json");
         
-        if ((isRateLimit || isUnavailable) && attempt < maxRetries) {
+        if ((isRateLimit || isUnavailable || isMalformedJson) && attempt < maxRetries) {
           console.warn(`Groq evaluation failed (Attempt ${attempt + 1}/${maxRetries + 1}). Retrying...`, error.message);
           // Exponential backoff with jitter
           const jitter = Math.random() * 500;
@@ -202,8 +203,9 @@ You must return ONLY a JSON object containing EXACTLY these keys:
         
         const isRateLimit = msg.includes("429") || msg.includes("rate limit") || msg.includes("too many requests");
         const isUnavailable = msg.includes("503") || msg.includes("unavailable") || msg.includes("500");
+        const isMalformedJson = error.name === "SyntaxError" || msg.includes("json");
         
-        if ((isRateLimit || isUnavailable) && attempt < maxRetries) {
+        if ((isRateLimit || isUnavailable || isMalformedJson) && attempt < maxRetries) {
           console.warn(`Groq Improvement failed (Attempt ${attempt + 1}/${maxRetries + 1}). Retrying...`, error.message);
           const jitter = Math.random() * 500;
           const delay = (baseDelay * Math.pow(2, attempt)) + jitter;
@@ -231,6 +233,114 @@ You must return ONLY a JSON object containing EXACTLY these keys:
       }
       
       console.error("Groq Improvement Unknown Error:", error);
+      throw new Error("UNKNOWN_ERROR");
+    }
+  }
+  
+  throw new Error("UNKNOWN_ERROR");
+}
+
+export interface InterviewerPerspective {
+  recruiterImpression: string;
+  positiveSignals: string[];
+  potentialConcerns: string[];
+  likelyFollowUps: string[];
+  hiringSignal: "Strong" | "Mixed" | "Weak";
+  hiringSignalExplanation: string;
+  howToImproveImpression: string;
+}
+
+export async function analyzeInterviewerPerspectiveGroq(
+  question: string,
+  originalAnswer: string,
+  evaluationContext: string,
+  role: string,
+  experience: string,
+  difficulty: string
+): Promise<InterviewerPerspective> {
+  const maxRetries = 3;
+  const baseDelay = 1000;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const ai = getGroqClient();
+      const modelName = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
+
+      const systemInstruction = `You are a strict, observant technical recruiter and hiring manager.
+The user wants to know what an interviewer is REALLY thinking when they hear this specific answer.
+Context:
+- Target Role: ${role}
+- Experience Level: ${experience}
+- Difficulty: ${difficulty}
+
+Task:
+Provide an "Interviewer Perspective" on the candidate's answer.
+Rule 1: Frame impressions as possibilities or inferences (e.g., "An interviewer might infer...", "This suggests..."). Do NOT make definitive judgments.
+Rule 2: Never invent fictitious experience, skills, achievements, or outcomes. Base your analysis STRICTLY on the text of the provided answer.
+Rule 3: Describe the hiring signal purely based on the evidence quality within this single answer, not as a final hiring decision.
+
+You must return ONLY a JSON object containing EXACTLY these keys:
+- recruiterImpression (string): What an interviewer might reasonably infer about the candidate from this answer.
+- positiveSignals (array of strings): Strengths communicated by the answer.
+- potentialConcerns (array of strings): Ambiguities, missing evidence, or weak signals.
+- likelyFollowUps (array of strings): Realistic, challenging follow-up questions the interviewer might ask next.
+- hiringSignal ("Strong", "Mixed", or "Weak"): Based purely on this single answer's evidence quality.
+- hiringSignalExplanation (string): A brief explanation supporting the chosen hiringSignal.
+- howToImproveImpression (string): Actionable advice to change the interviewer's mind for the better.`;
+
+      const prompt = `Question: ${question}\nCandidate Answer: ${originalAnswer}\nAI Feedback Context:\n${evaluationContext}`;
+
+      const response = await ai.chat.completions.create({
+        model: modelName,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("UNKNOWN_ERROR: No response text from Groq");
+      }
+
+      return JSON.parse(content) as InterviewerPerspective;
+    } catch (error) {
+      if (error instanceof Error) {
+        const msg = error.message.toLowerCase();
+        
+        const isRateLimit = msg.includes("429") || msg.includes("rate limit") || msg.includes("too many requests");
+        const isUnavailable = msg.includes("503") || msg.includes("unavailable") || msg.includes("500");
+        const isMalformedJson = error.name === "SyntaxError" || msg.includes("json");
+        
+        if ((isRateLimit || isUnavailable || isMalformedJson) && attempt < maxRetries) {
+          console.warn(`Groq Perspective failed (Attempt ${attempt + 1}/${maxRetries + 1}). Retrying...`, error.message);
+          const jitter = Math.random() * 500;
+          const delay = (baseDelay * Math.pow(2, attempt)) + jitter;
+          await new Promise(res => setTimeout(res, delay));
+          continue;
+        }
+
+        console.error("Groq Perspective Final Error:", error.message);
+        
+        if (msg.includes("groq_api_key is not configured") || msg.includes("invalid api key") || msg.includes("401")) {
+          throw new Error("INVALID_API_KEY");
+        }
+        if (isRateLimit) {
+          throw new Error("RATE_LIMITED");
+        }
+        if (msg.includes("quota") || msg.includes("insufficient_quota")) {
+          throw new Error("QUOTA_EXHAUSTED");
+        }
+        if (isUnavailable) {
+          throw new Error("SERVICE_UNAVAILABLE");
+        }
+        if (msg.includes("does not exist") || msg.includes("model_not_found") || msg.includes("404")) {
+          throw new Error("MODEL_UNAVAILABLE");
+        }
+      }
+      
+      console.error("Groq Perspective Unknown Error:", error);
       throw new Error("UNKNOWN_ERROR");
     }
   }

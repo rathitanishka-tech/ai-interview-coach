@@ -64,6 +64,15 @@ const recommendationDict: Record<DimensionKey, string> = {
   communication: "Record yourself answering mock questions. Focus on eliminating filler words, speaking at a measured pace, and structuring your thoughts logically."
 };
 
+function isGenuineEvaluation(ans: any): boolean {
+  if (ans.evaluationStatus !== 'evaluated' || !ans.evaluation) return false;
+  // Exclude old fallback records disguised as genuine evaluations
+  if (ans.evaluation.idealAnswer === "N/A" || (ans.evaluation.score === 65 && ans.evaluation.strengths?.includes("Provided an answer"))) {
+    return false;
+  }
+  return true;
+}
+
 export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsData {
   const totalInterviews = history.length;
   const totalQuestions = history.reduce((acc, curr) => {
@@ -79,11 +88,11 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
 
   history.forEach(record => {
     Object.values(record.answers).forEach(ans => {
-      if (ans.evaluationStatus === 'evaluated' && ans.evaluation) {
-        totalTech += ans.evaluation.technicalAccuracy || 0;
-        totalRel += ans.evaluation.relevance || 0;
-        totalComp += ans.evaluation.completeness || 0;
-        totalComm += ans.evaluation.communication || 0;
+      if (isGenuineEvaluation(ans)) {
+        totalTech += ans.evaluation!.technicalAccuracy || 0;
+        totalRel += ans.evaluation!.relevance || 0;
+        totalComp += ans.evaluation!.completeness || 0;
+        totalComm += ans.evaluation!.communication || 0;
         evalCount++;
       }
     });
@@ -105,11 +114,11 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
 
   trendData.forEach(record => {
     Object.values(record.answers).forEach(ans => {
-      if (ans.evaluationStatus === 'evaluated' && ans.evaluation) {
-        dimScores.technicalAccuracy.push(ans.evaluation.technicalAccuracy);
-        dimScores.relevance.push(ans.evaluation.relevance);
-        dimScores.completeness.push(ans.evaluation.completeness);
-        dimScores.communication.push(ans.evaluation.communication);
+      if (isGenuineEvaluation(ans)) {
+        dimScores.technicalAccuracy.push(ans.evaluation!.technicalAccuracy);
+        dimScores.relevance.push(ans.evaluation!.relevance);
+        dimScores.completeness.push(ans.evaluation!.completeness);
+        dimScores.communication.push(ans.evaluation!.communication);
       }
     });
   });
@@ -178,7 +187,7 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
     
     record.questions.forEach(q => {
       const ans = record.answers[q.id];
-      if (ans && ans.evaluationStatus === 'evaluated' && ans.evaluation) {
+      if (ans && isGenuineEvaluation(ans)) {
         const clusterId = q.originalId || q.id;
         if (!recordClusters[clusterId]) {
           recordClusters[clusterId] = { 
@@ -186,13 +195,13 @@ export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsDa
             tech: 0, rel: 0, comp: 0, comm: 0, improvements: []
           };
         }
-        recordClusters[clusterId].total += ans.evaluation.score;
-        recordClusters[clusterId].tech += ans.evaluation.technicalAccuracy;
-        recordClusters[clusterId].rel += ans.evaluation.relevance;
-        recordClusters[clusterId].comp += ans.evaluation.completeness;
-        recordClusters[clusterId].comm += ans.evaluation.communication;
-        if (ans.evaluation.improvements && Array.isArray(ans.evaluation.improvements)) {
-          recordClusters[clusterId].improvements.push(...ans.evaluation.improvements);
+        recordClusters[clusterId].total += ans.evaluation!.score;
+        recordClusters[clusterId].tech += ans.evaluation!.technicalAccuracy;
+        recordClusters[clusterId].rel += ans.evaluation!.relevance;
+        recordClusters[clusterId].comp += ans.evaluation!.completeness;
+        recordClusters[clusterId].comm += ans.evaluation!.communication;
+        if (ans.evaluation!.improvements && Array.isArray(ans.evaluation!.improvements)) {
+          recordClusters[clusterId].improvements.push(...ans.evaluation!.improvements);
         }
         recordClusters[clusterId].count++;
         if (!q.isFollowUp && q.difficulty) {

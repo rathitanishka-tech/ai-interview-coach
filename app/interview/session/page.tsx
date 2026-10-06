@@ -49,7 +49,14 @@ export default function SessionPage() {
     setMounted(true);
     try {
       const saved = sessionStorage.getItem("interviewConfig");
-      const practiceQ = sessionStorage.getItem("practiceQuestion");
+      const isPracticeMode = window.location.search.includes("mode=practice");
+      const practiceQ = isPracticeMode ? sessionStorage.getItem("practiceQuestion") : null;
+      
+      if (!isPracticeMode) {
+        sessionStorage.removeItem("practiceQuestion");
+        sessionStorage.removeItem("practiceTaskId");
+      }
+
       if (saved) {
         const parsed = JSON.parse(saved);
         setConfig(parsed);
@@ -302,17 +309,7 @@ export default function SessionPage() {
           ...prev[question.id],
           evaluationStatus: 'fallback',
           feedback: fallbackFeedback,
-          aiError: displayMsg,
-          evaluation: {
-            score: fallbackScore,
-            technicalAccuracy: 65,
-            relevance: 65,
-            completeness: 65,
-            communication: 65,
-            strengths: ["Provided an answer"],
-            improvements: ["Unable to evaluate deeply due to service error"],
-            idealAnswer: "N/A"
-          }
+          aiError: displayMsg
         }
       }));
       

@@ -91,7 +91,7 @@ export function AnswerImprovementStudio({
     }));
     sessionStorage.setItem("practiceQuestion", JSON.stringify(question));
     // We intentionally DO NOT set practiceTaskId, so it acts purely as a 1-off practice
-    router.push("/interview/session");
+    router.push("/interview/session?mode=practice");
   };
 
   if (isLoading) {

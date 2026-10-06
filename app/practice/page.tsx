@@ -50,7 +50,7 @@ export default function PracticePage() {
       }));
       sessionStorage.setItem("practiceQuestion", JSON.stringify(task.questionPayload));
       sessionStorage.setItem("practiceTaskId", task.id);
-      router.push("/interview/session");
+      router.push("/interview/session?mode=practice");
     }
   };
 

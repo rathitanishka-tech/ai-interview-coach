@@ -7,12 +7,14 @@ import { getInterviewHistory, InterviewHistoryRecord } from "@/lib/interview/sto
 import { getAnalyticsData, WEAKNESS_THRESHOLD } from "@/lib/interview/analytics";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { AnswerImprovementStudio } from "@/components/AnswerImprovementStudio";
+import { InterviewerPerspectiveStudio } from "@/components/InterviewerPerspectiveStudio";
 
 export default function HistoryPage() {
   const [history, setHistory] = useState<InterviewHistoryRecord[]>([]);
   const [mounted, setMounted] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [improvingAnswers, setImprovingAnswers] = useState<Record<string, boolean>>({});
+  const [perspectiveAnswers, setPerspectiveAnswers] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -311,16 +313,30 @@ export default function HistoryPage() {
                                     </div>
                                   </div>
                                   
-                                  {!improvingAnswers[q.id] && (
-                                    <div style={{ marginTop: '1.5rem' }}>
+                                  <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+                                    {!improvingAnswers[q.id] && (
                                       <button 
                                         className={styles.btnSecondary}
-                                        onClick={() => setImprovingAnswers(prev => ({ ...prev, [q.id]: true }))}
+                                        onClick={() => {
+                                          setImprovingAnswers(prev => ({ ...prev, [q.id]: true }));
+                                          setPerspectiveAnswers(prev => ({ ...prev, [q.id]: false }));
+                                        }}
                                       >
                                         Improve Answer with AI ✨
                                       </button>
-                                    </div>
-                                  )}
+                                    )}
+                                    {!perspectiveAnswers[q.id] && (
+                                      <button 
+                                        className={styles.btnSecondary}
+                                        onClick={() => {
+                                          setPerspectiveAnswers(prev => ({ ...prev, [q.id]: true }));
+                                          setImprovingAnswers(prev => ({ ...prev, [q.id]: false }));
+                                        }}
+                                      >
+                                        View Interviewer Perspective 👁️
+                                      </button>
+                                    )}
+                                  </div>
                                   
                                   {improvingAnswers[q.id] && (
                                     <AnswerImprovementStudio
@@ -331,6 +347,18 @@ export default function HistoryPage() {
                                       config={record.config}
                                       existingData={ans.improvementData}
                                       onClose={() => setImprovingAnswers(prev => ({ ...prev, [q.id]: false }))}
+                                    />
+                                  )}
+
+                                  {perspectiveAnswers[q.id] && (
+                                    <InterviewerPerspectiveStudio
+                                      sessionId={record.id}
+                                      question={q}
+                                      originalAnswer={ans.text}
+                                      evaluationContext={ans.feedback || "No feedback"}
+                                      config={record.config}
+                                      existingData={ans.interviewerPerspective}
+                                      onClose={() => setPerspectiveAnswers(prev => ({ ...prev, [q.id]: false }))}
                                     />
                                   )}
                                 </div>
