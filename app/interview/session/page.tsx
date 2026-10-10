@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import styles from "./session.module.css";
 import { InterviewConfig, Question, getQuestions, evaluateAnswer, getQuestionsByDifficulty } from "@/lib/interview/questions";
+import { generateSessionDebrief } from "@/lib/interview/analytics";
 
 interface AnswerState {
   questionId: string;
@@ -363,6 +364,9 @@ export default function SessionPage() {
   };
 
   if (isCompleted) {
+    const debrief = generateSessionDebrief(answers, elapsedTime);
+    const answeredCount = Object.keys(answers).filter(k => answers[k].text.trim()).length;
+
     return (
       <div className={styles.container}>
         <header className={styles.topBar}>
@@ -376,13 +380,59 @@ export default function SessionPage() {
             
             <div className={styles.completionStats}>
               <div className={styles.stat}>
-                <span className={styles.statValue}>{Object.keys(answers).filter(k => answers[k].text.trim()).length} / {questions.length}</span>
+                <span className={styles.statValue}>{answeredCount} / {questions.length}</span>
                 <span className={styles.statLabel}>Questions Answered</span>
               </div>
               <div className={styles.stat}>
                 <span className={styles.statValue}>{formatTime(elapsedTime)}</span>
                 <span className={styles.statLabel}>Total Time</span>
               </div>
+            </div>
+
+            {/* Post-Interview Debrief */}
+            <div className={styles.debriefSection}>
+               <h3>Session Debrief</h3>
+               {debrief.hasGenuineEvals ? (
+                 <div className={styles.debriefContent}>
+                    <div className={styles.debriefGrid}>
+                       <div className={styles.debriefStat}>
+                          <span>Technical</span>
+                          <strong>{debrief.avgTech}/100</strong>
+                       </div>
+                       <div className={styles.debriefStat}>
+                          <span>Relevance</span>
+                          <strong>{debrief.avgRel}/100</strong>
+                       </div>
+                       <div className={styles.debriefStat}>
+                          <span>Completeness</span>
+                          <strong>{debrief.avgComp}/100</strong>
+                       </div>
+                       <div className={styles.debriefStat}>
+                          <span>Communication</span>
+                          <strong>{debrief.avgComm}/100</strong>
+                       </div>
+                    </div>
+                    
+                    {debrief.pacingInsight && (
+                      <div className={styles.pacingInsight}>
+                         <strong>⏱️ Pacing:</strong> {debrief.pacingInsight}
+                      </div>
+                    )}
+
+                    {debrief.priorityDimension && (
+                      <div className={styles.priorityInsight}>
+                         <span><strong>🎯 Priority Area:</strong> Your lowest score was in {debrief.priorityDimension}.</span>
+                         <Link href="/practice" className={styles.btnSecondary} style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }}>
+                           Practice This Skill
+                         </Link>
+                      </div>
+                    )}
+                 </div>
+               ) : (
+                 <div className={styles.insufficientData}>
+                    <p>Not enough genuine evaluations were generated during this session to build a reliable debrief. This happens if AI evaluation fails or if answers are too short.</p>
+                 </div>
+               )}
             </div>
 
             <div className={styles.answersList}>

@@ -64,13 +64,78 @@ const recommendationDict: Record<DimensionKey, string> = {
   communication: "Record yourself answering mock questions. Focus on eliminating filler words, speaking at a measured pace, and structuring your thoughts logically."
 };
 
-function isGenuineEvaluation(ans: AnswerState): boolean {
+export function isGenuineEvaluation(ans: AnswerState): boolean {
   if (ans.evaluationStatus !== 'evaluated' || !ans.evaluation) return false;
   // Exclude old fallback records disguised as genuine evaluations
   if (ans.evaluation.idealAnswer === "N/A" || (ans.evaluation.score === 65 && ans.evaluation.strengths?.includes("Provided an answer"))) {
     return false;
   }
   return true;
+}
+
+export interface SessionDebrief {
+  hasGenuineEvals: boolean;
+  avgTech: number;
+  avgRel: number;
+  avgComp: number;
+  avgComm: number;
+  pacingInsight: string;
+  priorityDimension: string;
+}
+
+export function generateSessionDebrief(answers: Record<string, AnswerState>, elapsedTime: number): SessionDebrief {
+  let evaluatedCount = 0;
+  let totalTech = 0, totalRel = 0, totalComp = 0, totalComm = 0;
+  
+  Object.values(answers).forEach(ans => {
+    if (isGenuineEvaluation(ans)) {
+      totalTech += ans.evaluation!.technicalAccuracy;
+      totalRel += ans.evaluation!.relevance;
+      totalComp += ans.evaluation!.completeness;
+      totalComm += ans.evaluation!.communication;
+      evaluatedCount++;
+    }
+  });
+
+  const hasGenuineEvals = evaluatedCount > 0;
+  const avgTech = hasGenuineEvals ? Math.round(totalTech / evaluatedCount) : 0;
+  const avgRel = hasGenuineEvals ? Math.round(totalRel / evaluatedCount) : 0;
+  const avgComp = hasGenuineEvals ? Math.round(totalComp / evaluatedCount) : 0;
+  const avgComm = hasGenuineEvals ? Math.round(totalComm / evaluatedCount) : 0;
+
+  const answeredCount = Object.keys(answers).filter(k => answers[k].text.trim()).length;
+  
+  // Pacing insight (only if reliable timing data exists)
+  let pacingInsight = "";
+  if (answeredCount > 0 && elapsedTime > 30) {
+    const avgSecondsPerAnswer = elapsedTime / answeredCount;
+    if (avgSecondsPerAnswer < 30) {
+      pacingInsight = "You answered very quickly. Consider taking more time to structure your thoughts.";
+    } else if (avgSecondsPerAnswer > 180) {
+      pacingInsight = "Your answers were quite long. Focus on the STAR method to stay concise.";
+    } else {
+      pacingInsight = "Good pacing! Your answer length was within the sweet spot.";
+    }
+  }
+
+  // Prioritized improvement area
+  let priorityDimension = "";
+  if (hasGenuineEvals) {
+    const scores = [
+      { key: "Technical Accuracy", val: avgTech },
+      { key: "Relevance", val: avgRel },
+      { key: "Completeness", val: avgComp },
+      { key: "Communication", val: avgComm }
+    ];
+    scores.sort((a, b) => a.val - b.val);
+    if (scores[0].val < 80) {
+      priorityDimension = scores[0].key;
+    }
+  }
+  
+  return {
+    hasGenuineEvals, avgTech, avgRel, avgComp, avgComm, pacingInsight, priorityDimension
+  };
 }
 
 export function getAnalyticsData(history: InterviewHistoryRecord[]): AnalyticsData {
